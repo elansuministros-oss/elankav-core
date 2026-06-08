@@ -5,6 +5,10 @@ import './App.css';
 
 export default function OperacionesCentrales() {
   const [vistaActiva, setVistaActiva] = useState('home');
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [touchStartY, setTouchStartY] = useState(null);
+  const [direccionSwipe, setDireccionSwipe] = useState('quieto');
 
   const fecha = new Date();
 
@@ -90,10 +94,60 @@ export default function OperacionesCentrales() {
     },
   ];
 
+  const indiceActivo = useMemo(
+    () => salas.findIndex((sala) => sala.id === vistaActiva),
+    [salas, vistaActiva]
+  );
+
   const salaActiva = useMemo(
     () => salas.find((sala) => sala.id === vistaActiva) || salas[0],
-    [vistaActiva]
+    [salas, vistaActiva]
   );
+
+  const cambiarVista = (nuevoIndice, direccion = 'quieto') => {
+    const total = salas.length;
+    const indiceNormalizado = (nuevoIndice + total) % total;
+    setDireccionSwipe(direccion);
+    setVistaActiva(salas[indiceNormalizado].id);
+    window.setTimeout(() => setDireccionSwipe('quieto'), 280);
+  };
+
+  const irAVista = (id) => {
+    const nuevoIndice = salas.findIndex((sala) => sala.id === id);
+    const direccion = nuevoIndice > indiceActivo ? 'izquierda' : 'derecha';
+    cambiarVista(nuevoIndice, direccion);
+    setMenuAbierto(false);
+  };
+
+  const manejarTouchStart = (evento) => {
+    const toque = evento.touches[0];
+    setTouchStartX(toque.clientX);
+    setTouchStartY(toque.clientY);
+  };
+
+  const manejarTouchEnd = (evento) => {
+    if (touchStartX === null || touchStartY === null) return;
+
+    const toque = evento.changedTouches[0];
+    const diferenciaX = touchStartX - toque.clientX;
+    const diferenciaY = touchStartY - toque.clientY;
+    const movimientoHorizontal = Math.abs(diferenciaX);
+    const movimientoVertical = Math.abs(diferenciaY);
+
+    setTouchStartX(null);
+    setTouchStartY(null);
+
+    if (movimientoHorizontal < 70 || movimientoHorizontal < movimientoVertical) {
+      return;
+    }
+
+    if (diferenciaX > 0) {
+      cambiarVista(indiceActivo + 1, 'izquierda');
+      return;
+    }
+
+    cambiarVista(indiceActivo - 1, 'derecha');
+  };
 
   const kpisHome = [
     {
@@ -130,16 +184,16 @@ export default function OperacionesCentrales() {
 
   const recomendacionesHome = [
     {
-      titulo: 'Mantener Home corto',
+      titulo: 'Menú ELAN como navegación principal',
       detalle:
-        'Cada sala debe operar por separado para evitar scroll largo en móvil.',
+        'El símbolo mantiene la identidad del sistema y abre todas las salas.',
       estado: 'Activo',
     },
     {
-      titulo: 'Iniciar con KAVTORÉ CEO',
+      titulo: 'Deslizar pantallas',
       detalle:
-        'Será la primera sala funcional con indicadores y decisiones generales.',
-      estado: 'Siguiente',
+        'También puedes pasar de una sala a otra deslizando izquierda o derecha.',
+      estado: 'Móvil',
     },
   ];
 
@@ -265,8 +319,15 @@ export default function OperacionesCentrales() {
     },
   };
 
-  const datosSala =
-    datosPorSala[vistaActiva] || datosPorSala.ceo;
+  const datosSala = datosPorSala[vistaActiva] || datosPorSala.ceo;
+
+  const renderLogoElan = (claseExtra = '') => (
+    <span className={`kavtore-logo-lines ${claseExtra}`} aria-hidden="true">
+      <i />
+      <i />
+      <i />
+    </span>
+  );
 
   const renderHome = () => (
     <>
@@ -275,9 +336,9 @@ export default function OperacionesCentrales() {
           <span>Centro de comando</span>
           <strong>ELAN KAVTORÉ</strong>
           <p>
-            Orquestador de IA y Director Operativo Digital de ELANKAV. Esta
-            vista queda corta para móvil; las salas operativas se abren por
-            separado desde el menú.
+            Orquestador de IA y Director Operativo Digital de ELANKAV. El menú
+            ELAN abre todas las salas y el gesto lateral permite avanzar entre
+            pantallas sin perder espacio visual.
           </p>
 
           <div className="ceo-hero-kpis">
@@ -300,9 +361,9 @@ export default function OperacionesCentrales() {
           ))}
 
           <article className="ceo-mini-card">
-            <span>Modo móvil</span>
-            <strong>Activo</strong>
-            <small>Home corto y navegación por salas.</small>
+            <span>Navegación</span>
+            <strong>Swipe</strong>
+            <small>Desliza izquierda o derecha para cambiar de sala.</small>
           </article>
         </div>
       </section>
@@ -411,40 +472,106 @@ export default function OperacionesCentrales() {
 
   return (
     <main className="executive-center">
-      <section className="executive-status-band">
+      <header className="kavtore-app-header">
+        <button
+          type="button"
+          className="kavtore-logo-menu"
+          onClick={() => setMenuAbierto(true)}
+          aria-label="Abrir menú ELAN KAVTORÉ"
+        >
+          {renderLogoElan()}
+        </button>
+
+        <div className="kavtore-app-title">
+          <strong>{salaActiva.titulo}</strong>
+          <small>
+            {salaActiva.icono} {salaActiva.nombre} · {indiceActivo + 1}/{salas.length} · Desliza
+          </small>
+        </div>
+      </header>
+
+      {menuAbierto && (
+        <div className="kavtore-menu-layer" role="presentation">
+          <button
+            type="button"
+            className="kavtore-menu-backdrop"
+            onClick={() => setMenuAbierto(false)}
+            aria-label="Cerrar menú"
+          />
+
+          <aside className="kavtore-sidebar" aria-label="Menú ELAN KAVTORÉ">
+            <div className="kavtore-sidebar-head">
+              <div className="kavtore-logo-menu kavtore-logo-menu-sidebar">
+                {renderLogoElan()}
+              </div>
+              <div>
+                <strong>ELAN KAVTORÉ</strong>
+                <small>Menú operativo</small>
+              </div>
+            </div>
+
+            <div className="kavtore-sidebar-list">
+              {salas.map((sala) => (
+                <button
+                  key={sala.id}
+                  type="button"
+                  onClick={() => irAVista(sala.id)}
+                  className={
+                    vistaActiva === sala.id
+                      ? 'kavtore-sidebar-item kavtore-sidebar-item-activo'
+                      : 'kavtore-sidebar-item'
+                  }
+                >
+                  <span>{sala.icono}</span>
+                  <div>
+                    <strong>{sala.nombre}</strong>
+                    <small>{sala.tipo}</small>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      <section className="executive-status-band kavtore-compact-status">
         <div>
-          <span>ELANKAV CORE · HITO-0013.2 · NAVEGACIÓN MÓVIL</span>
+          <span>ELANKAV CORE · HITO-0013.5 · MENÚ ELAN + SWIPE</span>
           <strong>{saludo}</strong>
           <p>
-            Soy ELAN KAVTORÉ. Sistema Operativo Inteligente de ELANKAV. El
-            control ahora funciona por salas para evitar scroll infinito en
-            móvil.
+            Soy ELAN KAVTORÉ. El menú ELAN queda como navegación principal y las
+            pantallas también se pueden deslizar lateralmente.
           </p>
         </div>
 
         <div className="status-band-grid">
-          <small>Commit base: 9b7b945</small>
+          <small>Menú ELAN activo</small>
+          <small>Swipe lateral activo</small>
           <small>Home corto</small>
-          <small>Salas separadas</small>
           <small>Modo móvil primero</small>
         </div>
       </section>
 
-      <nav className="executive-nav" aria-label="Navegación ELAN KAVTORÉ">
+      <div className="kavtore-screen-indicator" aria-label="Indicador de pantalla">
         {salas.map((sala) => (
           <button
             key={sala.id}
             type="button"
-            onClick={() => setVistaActiva(sala.id)}
-            className={vistaActiva === sala.id ? 'kavtore-nav-activa' : ''}
-          >
-            <span>{sala.icono}</span>
-            {sala.nombre}
-          </button>
+            onClick={() => irAVista(sala.id)}
+            className={vistaActiva === sala.id ? 'activo' : ''}
+            aria-label={`Ir a ${sala.nombre}`}
+          />
         ))}
-      </nav>
+      </div>
 
-      {vistaActiva === 'home' ? renderHome() : renderSala()}
+      <section
+        key={vistaActiva}
+        className={`kavtore-swipe-screen kavtore-swipe-${direccionSwipe}`}
+        onTouchStart={manejarTouchStart}
+        onTouchEnd={manejarTouchEnd}
+      >
+        {vistaActiva === 'home' ? renderHome() : renderSala()}
+      </section>
     </main>
   );
 }
