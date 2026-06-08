@@ -1,264 +1,296 @@
-export const BRIDGE_VERSION = 'ELANKAV-CENTRAL-BRIDGE-v1';
+import {
+  clientesIniciales,
+  empresasIniciales,
+  leadsIniciales,
+  mensajesWhatsApp,
+  operacionesIniciales,
+  tareasIA,
+  timelineInicial,
+  unidadesGrupo,
+  kavtoreSalas,
+} from '../data/coreData';
 
-const UNIDADES_OFICIALES = [
-  { id: 'elanpet', codigo: 'PET', nombre: 'ELANPET', estado: 'Operativo' },
-  { id: 'elanvisual', codigo: 'VIS', nombre: 'ELANKAV VISUAL', estado: 'Activo' },
-  { id: 'elancenter', codigo: 'CENTER', nombre: 'ELANKAV CENTER', estado: 'Preparación' },
-  { id: 'elansolar', codigo: 'SOL', nombre: 'ELANKAV SOLAR', estado: 'Preparación' },
-  { id: 'elanai', codigo: 'AI', nombre: 'ELAN AI', estado: 'Diseño' },
-];
+const STORAGE_KEYS = {
+  empresas: 'elankav_empresas',
+  contactos: 'elankav_contactos',
+  clientes: 'elankav_clientes',
+  cotizaciones: 'elankav_cotizaciones',
+  pedidos: 'elankav_pedidos',
+  ordenesTrabajo: 'elankav_ordenes_trabajo',
+  produccion: 'elankav_produccion',
+  cobros: 'elankav_cobros',
+  comisiones: 'elankav_comisiones',
+  inventario: 'elankav_inventario',
+  materiales: 'elankav_materiales',
+  leads: 'elankav_leads_whatsapp',
+  notificaciones: 'elankav_notificaciones_crm',
+  proveedores: 'elankav_proveedores',
+  compras: 'elankav_compras',
+  cuentasPorCobrar: 'elankav_cuentas_por_cobrar',
+  cuentasPorPagar: 'elankav_cuentas_por_pagar',
+};
 
-const estadosActivos = [
-  'Pendiente',
-  'Nueva',
-  'Nuevo',
-  'Diseño',
-  'Cotizar',
-  'Diagnóstico',
-  'Seguimiento',
-  'Sin clasificar',
-  'Lead nuevo',
-  'Aprobado',
-  'Producción',
-];
+export const dinero = (valor = 0, moneda = 'C$') => {
+  const numero = Number(valor || 0);
+  return `${moneda} ${numero.toLocaleString('es-NI', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
 
-const leerStorage = (clave, respaldo = []) => {
+const normalizarTexto = (valor = '') =>
+  String(valor)
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const leerStorage = (key, fallback = []) => {
   try {
-    const valor = localStorage.getItem(clave);
-    return valor ? JSON.parse(valor) : respaldo;
-  } catch {
-    return respaldo;
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return fallback;
+    }
+
+    const raw = window.localStorage.getItem(key);
+
+    if (!raw) {
+      return fallback;
+    }
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch (error) {
+    console.warn(`CentralBridge no pudo leer ${key}`, error);
+    return fallback;
   }
 };
 
-const numero = (valor) => Number(valor || 0);
+const obtenerMonto = (item = {}) => Number(item.total || item.monto || item.valor || item.importe || 0);
 
-export function dinero(valor = 0) {
-  return `C$ ${numero(valor).toLocaleString('es-NI')}`;
-}
+const obtenerUnidad = (item = {}) =>
+  item.unidad || item.unidadDetectada || item.unidadNegocio || item.area || item.categoria || 'Sin unidad';
 
-const normalizarUnidadId = (valor = '') => {
-  const texto = String(valor).toLowerCase();
+const obtenerEstado = (item = {}) => item.estado || item.estatus || item.status || 'Sin estado';
 
-  if (texto.includes('pet')) return 'elanpet';
-  if (texto.includes('visual') || texto.includes('rotul')) return 'elanvisual';
-  if (texto.includes('center') || texto.includes('centro')) return 'elancenter';
-  if (texto.includes('solar')) return 'elansolar';
-  if (texto.includes('ai') || texto.includes('ia')) return 'elanai';
-
-  return 'elanvisual';
+const estaPendiente = (item = {}) => {
+  const estado = normalizarTexto(obtenerEstado(item));
+  return [
+    'pendiente',
+    'nueva',
+    'nuevo',
+    'diseno',
+    'aprobado',
+    'produccion',
+    'seguimiento',
+    'lead nuevo',
+    'sin clasificar',
+    'en seguimiento',
+  ].includes(estado);
 };
 
-export function obtenerUnidad(unidades, unidadId) {
-  return unidades.find((unidad) => unidad.id === unidadId) || null;
-}
-
-export function cargarDatosCRM() {
-  const empresas = leerStorage('elankav_empresas');
-  const contactos = leerStorage('elankav_contactos');
-  const cotizaciones = leerStorage('elankav_cotizaciones');
-  const pedidos = leerStorage('elankav_pedidos');
-  const cobros = leerStorage('elankav_cobros');
-  const comisiones = leerStorage('elankav_comisiones');
-  const ordenesTrabajo = leerStorage('elankav_ordenes_trabajo');
-  const produccion = leerStorage('elankav_produccion');
-  const inventario = leerStorage('elankav_inventario');
-  const materiales = leerStorage('elankav_materiales');
-  const leadsWhatsApp = leerStorage('elankav_leads_whatsapp');
-  const notificacionesCRM = leerStorage('elankav_notificaciones_crm');
-
-  const operaciones = [
-    ...cotizaciones.map((item) => ({
-      id: item.id,
-      unidadId: normalizarUnidadId(item.unidadNegocio || item.unidad || item.unidadId),
-      unidad: item.unidadNegocio || item.unidad || 'ELANKAV VISUAL',
-      tipo: 'Cotización',
-      cliente: item.cliente || item.empresa || item.nombreCliente || 'Cliente sin nombre',
-      estado: item.estado || 'Nueva',
-      responsable: item.responsable || 'Ventas',
-      total: numero(item.total || item.monto || item.valor),
-      fecha: item.fecha || item.creado || item.actualizado || '',
-    })),
-    ...pedidos.map((item) => ({
-      id: item.id,
-      unidadId: normalizarUnidadId(item.unidadNegocio || item.unidad || item.unidadId),
-      unidad: item.unidadNegocio || item.unidad || 'ELANKAV VISUAL',
-      tipo: 'Pedido',
-      cliente: item.cliente || item.empresa || item.contacto || 'Cliente sin nombre',
-      estado: item.estado || 'Pendiente',
-      responsable: item.responsable || 'Operaciones',
-      total: numero(item.total || item.monto || item.valor),
-      fecha: item.fecha || item.creado || item.actualizado || '',
-    })),
-    ...ordenesTrabajo.map((item) => ({
-      id: item.id,
-      unidadId: normalizarUnidadId(item.unidadNegocio || item.unidad || item.unidadId),
-      unidad: item.unidadNegocio || item.unidad || 'ELANKAV VISUAL',
-      tipo: 'Orden de Trabajo',
-      cliente: item.cliente || item.empresa || item.proyecto || 'Proyecto sin nombre',
-      estado: item.estado || 'Pendiente',
-      responsable: item.responsable || 'Producción',
-      total: numero(item.total || item.monto || item.valor),
-      fecha: item.fecha || item.creado || item.actualizado || '',
-    })),
-    ...cobros.map((item) => ({
-      id: item.id,
-      unidadId: normalizarUnidadId(item.unidadNegocio || item.unidad || item.unidadId),
-      unidad: item.unidadNegocio || item.unidad || 'ELANKAV VISUAL',
-      tipo: 'Cobro',
-      cliente: item.cliente || item.empresa || 'Cliente sin nombre',
-      estado: item.estado || 'Pendiente',
-      responsable: 'Finanzas',
-      total: numero(item.montoCobrado || item.montoFactura || item.total),
-      fecha: item.fechaCobro || item.fecha || item.actualizado || '',
-    })),
-  ];
-
-  const leads = leadsWhatsApp.map((item) => ({
-    id: item.id,
-    unidadId: normalizarUnidadId(item.unidadNegocio || item.unidadDetectada || item.unidad || item.unidadId),
-    unidad: item.unidadNegocio || item.unidadDetectada || item.unidad || 'Sin clasificar',
-    cliente: item.cliente || item.nombre || item.telefono || 'Lead sin nombre',
-    origen: item.origen || 'WhatsApp',
-    etapa: item.estado || 'Lead nuevo',
-    valorEstimado: numero(item.valorEstimado || item.monto || 0),
-    probabilidad: numero(item.probabilidad || 30),
-  }));
-
-  const mensajes = leadsWhatsApp.map((item) => ({
-    id: item.id,
-    unidadId: normalizarUnidadId(item.unidadNegocio || item.unidadDetectada || item.unidad || item.unidadId),
-    cliente: item.cliente || item.nombre || item.telefono || 'Contacto WhatsApp',
-    mensaje: item.mensaje || item.descripcion || item.detalle || '',
-    estado: item.estado || 'Sin clasificar',
-    origen: item.origen || 'WhatsApp',
-  }));
-
-  return {
-    version: BRIDGE_VERSION,
-    unidades: UNIDADES_OFICIALES,
-    empresas,
-    clientes: contactos,
-    contactos,
-    cotizaciones,
-    pedidos,
-    cobros,
-    comisiones,
-    ordenesTrabajo,
-    produccion,
-    inventario,
-    materiales,
-    leads,
-    mensajes,
-    operaciones,
-    notificacionesCRM,
-    fuenteActual: 'CRM CENTRAL REAL vía LocalStorage',
-  };
-}
-
-export function enriquecerConUnidad(items = [], unidades = []) {
+export function enriquecerConUnidad(items = [], unidades = unidadesGrupo) {
   return items.map((item) => {
-    const unidad = obtenerUnidad(unidades, item.unidadId);
+    const unidadNombre = obtenerUnidad(item);
+    const unidad = unidades.find(
+      (unidadItem) =>
+        normalizarTexto(unidadItem.nombre) === normalizarTexto(unidadNombre) ||
+        normalizarTexto(unidadItem.codigo) === normalizarTexto(unidadNombre) ||
+        normalizarTexto(unidadItem.id) === normalizarTexto(unidadNombre)
+    );
+
     return {
       ...item,
-      unidadCodigo: unidad?.codigo || 'N/D',
-      unidadNombre: unidad?.nombre || item.unidad || 'Sin unidad',
-      unidadEstado: unidad?.estado || 'Sin estado',
+      unidad: unidad?.nombre || unidadNombre,
+      unidadId: unidad?.id || item.unidadId || normalizarTexto(unidadNombre).replace(/\s+/g, '-'),
+      unidadCodigo: unidad?.codigo || item.unidadCodigo || 'GEN',
     };
   });
 }
 
-export function calcularEstadoGlobal({
-  unidades = [],
-  operaciones = [],
-  leads = [],
-  mensajes = [],
-  empresas = [],
-  clientes = [],
-}) {
-  const operacionesActivas = operaciones.filter((op) => estadosActivos.includes(op.estado)).length;
-  const leadsActivos = leads.filter((lead) => estadosActivos.includes(lead.etapa)).length;
-  const mensajesPendientes = mensajes.filter((msg) =>
-    ['Sin clasificar', 'Lead nuevo', 'Pendiente', 'Nuevo'].includes(msg.estado)
-  ).length;
+export function cargarDatosCRM() {
+  const empresas = leerStorage(STORAGE_KEYS.empresas, empresasIniciales);
+  const contactos = leerStorage(STORAGE_KEYS.contactos, []);
+  const clientes = leerStorage(STORAGE_KEYS.clientes, clientesIniciales);
+  const cotizaciones = leerStorage(STORAGE_KEYS.cotizaciones, []);
+  const pedidos = leerStorage(STORAGE_KEYS.pedidos, operacionesIniciales.filter((item) => item.tipo === 'Pedido'));
+  const ordenesTrabajo = leerStorage(STORAGE_KEYS.ordenesTrabajo, []);
+  const produccion = leerStorage(STORAGE_KEYS.produccion, []);
+  const cobros = leerStorage(STORAGE_KEYS.cobros, []);
+  const comisiones = leerStorage(STORAGE_KEYS.comisiones, []);
+  const inventario = leerStorage(STORAGE_KEYS.inventario, []);
+  const materiales = leerStorage(STORAGE_KEYS.materiales, []);
+  const leads = leerStorage(STORAGE_KEYS.leads, leadsIniciales);
+  const notificaciones = leerStorage(STORAGE_KEYS.notificaciones, []);
+  const proveedores = leerStorage(STORAGE_KEYS.proveedores, []);
+  const compras = leerStorage(STORAGE_KEYS.compras, []);
+  const cuentasPorCobrar = leerStorage(STORAGE_KEYS.cuentasPorCobrar, []);
+  const cuentasPorPagar = leerStorage(STORAGE_KEYS.cuentasPorPagar, []);
 
-  const ingresosVisibles = operaciones.reduce((acc, op) => acc + numero(op.total), 0);
+  const mensajes = leads.length > 0 ? leads : mensajesWhatsApp;
 
-  const ingresosProyectados = leads.reduce((acc, lead) => {
-    const valor = numero(lead.valorEstimado);
-    const probabilidad = numero(lead.probabilidad) / 100;
-    return acc + valor * probabilidad;
-  }, ingresosVisibles);
+  const operacionesDesdeCRM = [
+    ...operacionesIniciales,
+    ...cotizaciones.map((item) => ({ ...item, tipo: item.tipo || 'Cotización' })),
+    ...pedidos.map((item) => ({ ...item, tipo: item.tipo || 'Pedido' })),
+    ...ordenesTrabajo.map((item) => ({ ...item, tipo: item.tipo || 'Orden de Trabajo' })),
+    ...produccion.map((item) => ({ ...item, tipo: item.tipo || 'Producción' })),
+    ...cobros.map((item) => ({ ...item, tipo: item.tipo || 'Cobro' })),
+  ];
 
   return {
-    version: BRIDGE_VERSION,
-    modo: 'LAB_FRONTEND_CONTROL',
-    listoParaIntegracion: true,
-    unidades: unidades.length,
-    operaciones: operaciones.length,
-    operacionesActivas,
-    leads: leads.length,
-    leadsActivos,
-    mensajes: mensajes.length,
-    mensajesPendientes,
-    empresas: empresas.length,
-    clientes: clientes.length,
-    ingresosVisibles,
-    ingresosProyectados,
-    fuenteActual: 'CRM CENTRAL REAL vía LocalStorage',
-    fuenteFutura: 'Supabase / API Central',
+    unidades: unidadesGrupo,
+    kavtoreSalas,
+    operaciones: enriquecerConUnidad(operacionesDesdeCRM, unidadesGrupo),
+    empresas: enriquecerConUnidad(empresas, unidadesGrupo),
+    contactos,
+    clientes: enriquecerConUnidad(clientes, unidadesGrupo),
+    cotizaciones: enriquecerConUnidad(cotizaciones, unidadesGrupo),
+    pedidos: enriquecerConUnidad(pedidos, unidadesGrupo),
+    ordenesTrabajo: enriquecerConUnidad(ordenesTrabajo, unidadesGrupo),
+    produccion: enriquecerConUnidad(produccion, unidadesGrupo),
+    cobros: enriquecerConUnidad(cobros, unidadesGrupo),
+    comisiones,
+    inventario,
+    materiales,
+    leads: enriquecerConUnidad(leads, unidadesGrupo),
+    mensajes: enriquecerConUnidad(mensajes, unidadesGrupo),
+    proveedores,
+    compras,
+    cuentasPorCobrar,
+    cuentasPorPagar,
+    notificaciones,
+    tareasIA,
+    timeline: timelineInicial,
+    metadata: {
+      modo: 'LAB',
+      version: 'CentralBridge Kavtoré v0.1',
+      fuenteActual: 'LocalStorage + datos demo',
+      fuenteFutura: 'Supabase / CRM Central',
+      listoParaIntegracion: true,
+    },
   };
 }
 
-export function rankingUnidades({ unidades = [], operaciones = [], leads = [], mensajes = [] }) {
-  return unidades
-    .map((unidad) => {
-      const operacionesUnidad = operaciones.filter((op) => op.unidadId === unidad.id);
-      const leadsUnidad = leads.filter((lead) => lead.unidadId === unidad.id);
-      const mensajesUnidad = mensajes.filter((msg) => msg.unidadId === unidad.id);
-      const ingresos = operacionesUnidad.reduce((acc, op) => acc + numero(op.total), 0);
-      const proyectado = leadsUnidad.reduce(
-        (acc, lead) => acc + numero(lead.valorEstimado) * (numero(lead.probabilidad) / 100),
-        ingresos
-      );
-      const carga = operacionesUnidad.length + leadsUnidad.length + mensajesUnidad.length;
+export function calcularEstadoGlobal(datosCore = {}) {
+  const operaciones = datosCore.operaciones || [];
+  const empresas = datosCore.empresas || [];
+  const clientes = datosCore.clientes || [];
+  const leads = datosCore.leads || [];
+  const mensajes = datosCore.mensajes || [];
+  const cobros = datosCore.cobros || [];
+  const cotizaciones = datosCore.cotizaciones || [];
+  const pedidos = datosCore.pedidos || [];
+  const inventario = datosCore.inventario || [];
+  const materiales = datosCore.materiales || [];
+  const unidades = datosCore.unidades || [];
 
-      return {
-        ...unidad,
-        operaciones: operacionesUnidad.length,
-        leads: leadsUnidad.length,
-        mensajes: mensajesUnidad.length,
-        ingresos,
-        proyectado,
-        carga,
-      };
-    })
-    .sort((a, b) => b.proyectado - a.proyectado || b.carga - a.carga);
+  const ingresosVisibles = operaciones.reduce((acc, item) => acc + obtenerMonto(item), 0);
+  const cobrosVisibles = cobros.reduce((acc, item) => acc + obtenerMonto(item), 0);
+  const ingresosProyectados = unidades.reduce(
+    (acc, item) => acc + Number(item.ingresosProyectados || 0),
+    ingresosVisibles
+  );
+  const mensajesPendientes = mensajes.filter(estaPendiente).length;
+  const operacionesPendientes = operaciones.filter(estaPendiente).length;
+  const cotizacionesPendientes = cotizaciones.filter(estaPendiente).length;
+  const pedidosPendientes = pedidos.filter(estaPendiente).length;
+  const inventarioCritico = inventario.filter((item) => Number(item.stock || item.existencia || 0) <= Number(item.minimo || 0)).length;
+
+  return {
+    operaciones: operaciones.length,
+    empresas: empresas.length,
+    clientes: clientes.length,
+    leads: leads.length,
+    mensajes: mensajes.length,
+    cobros: cobros.length,
+    cotizaciones: cotizaciones.length,
+    pedidos: pedidos.length,
+    inventario: inventario.length,
+    materiales: materiales.length,
+    ingresosVisibles,
+    ingresosProyectados,
+    cobrosVisibles,
+    mensajesPendientes,
+    operacionesPendientes,
+    cotizacionesPendientes,
+    pedidosPendientes,
+    inventarioCritico,
+    listoParaIntegracion: datosCore.metadata?.listoParaIntegracion ?? true,
+    modo: datosCore.metadata?.modo || 'LAB',
+    version: datosCore.metadata?.version || 'CentralBridge Kavtoré v0.1',
+    fuenteActual: datosCore.metadata?.fuenteActual || 'LocalStorage + datos demo',
+    fuenteFutura: datosCore.metadata?.fuenteFutura || 'Supabase / CRM Central',
+  };
 }
 
-export function construirReporteEjecutivo(data) {
-  const estado = calcularEstadoGlobal(data);
-  const ranking = rankingUnidades(data);
+export function rankingUnidades({ unidades = [], operaciones = [], leads = [], mensajes = [] } = {}) {
+  return unidades.map((unidad) => {
+    const operacionesUnidad = operaciones.filter((item) => normalizarTexto(obtenerUnidad(item)) === normalizarTexto(unidad.nombre));
+    const leadsUnidad = leads.filter((item) => normalizarTexto(obtenerUnidad(item)) === normalizarTexto(unidad.nombre));
+    const mensajesUnidad = mensajes.filter((item) => normalizarTexto(obtenerUnidad(item)) === normalizarTexto(unidad.nombre));
+    const ingresos = operacionesUnidad.reduce((acc, item) => acc + obtenerMonto(item), 0);
+
+    return {
+      ...unidad,
+      operaciones: operacionesUnidad.length,
+      leads: leadsUnidad.length || unidad.leads || 0,
+      mensajes: mensajesUnidad.length,
+      ingresos: ingresos || Number(unidad.ingresos || 0),
+      proyectado: Number(unidad.ingresosProyectados || 0),
+      peso: operacionesUnidad.length * 3 + leadsUnidad.length * 2 + mensajesUnidad.length + ingresos / 1000,
+    };
+  }).sort((a, b) => b.peso - a.peso);
+}
+
+export function construirReporteEjecutivo(datosCore = {}) {
+  const estado = calcularEstadoGlobal(datosCore);
+  const alertas = [];
+
+  if (estado.mensajesPendientes > 0) {
+    alertas.push({
+      titulo: 'Mensajes pendientes',
+      detalle: `${estado.mensajesPendientes} conversaciones requieren clasificación o seguimiento.`,
+      nivel: 'Media',
+    });
+  }
+
+  if (estado.cotizacionesPendientes > 0) {
+    alertas.push({
+      titulo: 'Cotizaciones pendientes',
+      detalle: `${estado.cotizacionesPendientes} cotizaciones necesitan revisión comercial.`,
+      nivel: 'Alta',
+    });
+  }
+
+  if (estado.inventarioCritico > 0) {
+    alertas.push({
+      titulo: 'Inventario crítico',
+      detalle: `${estado.inventarioCritico} materiales están en nivel crítico.`,
+      nivel: 'Alta',
+    });
+  }
+
+  const recomendaciones = [
+    'Validar conexión CRM → CORE con datos reales.',
+    'Activar Knowledge Core para memorias especializadas.',
+    'Convertir ELAN AI Center en ELAN KAVTORÉ OS.',
+  ];
 
   return {
     estado,
-    ranking,
-    alertas: [
-      estado.mensajesPendientes > 0 && {
-        nivel: 'Alta',
-        titulo: 'Mensajes pendientes de clasificación',
-        detalle: 'El Centro WhatsApp debe clasificar unidad, servicio, origen, cliente y estado del lead.',
-      },
-      estado.leadsActivos > 0 && {
-        nivel: 'Media',
-        titulo: 'Leads activos sin cierre',
-        detalle: 'Los leads deben avanzar hacia cotización, pedido u orden de trabajo.',
-      },
-      {
-        nivel: 'Sistema',
-        titulo: 'CentralBridge conectado',
-        detalle: 'El LAB ya lee datos reales del CRM CENTRAL usando LocalStorage.',
-      },
-    ].filter(Boolean),
+    alertas,
+    recomendaciones,
+    accionPrincipal: alertas[0]?.titulo || 'Continuar construcción de ELAN KAVTORÉ OS',
+    resumen: 'ELANKAV CORE está listo para evolucionar de dashboard ejecutivo a sistema operativo inteligente.',
+  };
+}
+
+export function registrarOperacionCentral(data) {
+  console.log('Operación recibida:', data);
+
+  return {
+    success: true,
+    data,
+    timestamp: new Date().toISOString(),
   };
 }

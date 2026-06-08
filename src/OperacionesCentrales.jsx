@@ -50,6 +50,7 @@ export default function OperacionesCentrales({
 
   const operaciones = datosCore?.operaciones || [];
   const unidadesCore = datosCore?.unidades || [];
+  const salasKavtore = datosCore?.kavtoreSalas || [];
   const leads = datosCore?.leads || [];
   const mensajes = datosCore?.mensajes || [];
   const empresas = datosCore?.empresas || [];
@@ -226,10 +227,10 @@ export default function OperacionesCentrales({
       ],
     },
     {
-      titulo: 'ELAN AI Center',
-      subtitulo: 'Automatización futura',
+      titulo: 'KAVTORÉ OS Center',
+      subtitulo: 'Sistema operativo IA',
       icono: '🤖',
-      descripcion: 'Capa preparada para clasificación, análisis, seguimiento y asistencia IA.',
+      descripcion: 'Capa operativa para Knowledge Core, AI Router, salas especializadas, asistencia interna y automatización controlada.',
       clase: 'centro-ia',
       datos: [
         ['Bridge', estadoSeguro.version || 'Core'],
@@ -261,10 +262,10 @@ export default function OperacionesCentrales({
 
       <div className="panel-header panel-header-ejecutivo">
         <div>
-          <span className="etiqueta-core">ELANKAV CORE / LAB</span>
-          <h2>Executive Center · Dashboard CEO</h2>
+          <span className="etiqueta-core">ELAN KAVTORÉ / LAB</span>
+          <h2>ELAN KAVTORÉ OS · Dashboard CEO</h2>
           <p>
-            Panel central para operar unidades, mensajes, leads, clientes, empresas, reportes e IA sin tocar ELANPET, ELANKAV.COM ni CRM CENTRAL REAL.
+            Consola central para operar ELANKAV desde ELAN KAVTORÉ: CEO, comercial, visual, producción, finanzas, proveedores, marketing y CRM CENTRAL.
           </p>
         </div>
 
@@ -327,7 +328,7 @@ export default function OperacionesCentrales({
         <span>WhatsApp</span>
         <span>Leads</span>
         <span>Reportes</span>
-        <span>IA</span>
+        <span>KAVTORÉ</span>
       </div>
 
       <div className="centros-grid centros-grid-ejecutivo">
@@ -348,6 +349,33 @@ export default function OperacionesCentrales({
                   <strong>{valor}</strong>
                 </div>
               ))}
+            </div>
+          </article>
+        ))}
+      </div>
+
+
+
+      <div className="centros-grid centros-grid-ejecutivo">
+        {salasKavtore.map((sala) => (
+          <article className="centro-card centro-card-ejecutivo centro-ia" key={sala.id}>
+            <div className="centro-card-top">
+              <div className="centro-icono">🧠</div>
+              <span>{sala.estado}</span>
+            </div>
+
+            <h3>{sala.nombre}</h3>
+            <p>{sala.descripcion}</p>
+
+            <div className="centro-datos centro-datos-ejecutivo">
+              <div>
+                <small>Tipo</small>
+                <strong>Sala IA</strong>
+              </div>
+              <div>
+                <small>Memoria</small>
+                <strong>Knowledge Core</strong>
+              </div>
             </div>
           </article>
         ))}
@@ -457,7 +485,7 @@ export default function OperacionesCentrales({
         </div>
 
         <aside className="global-state-panel">
-          <span>Estado Global Grupo</span>
+          <span>Estado Global ELANKAV</span>
           <h4>{estadoSeguro.listoParaIntegracion ? 'Conectado y operativo' : 'Pendiente de conexión'}</h4>
           <p>{estadoSeguro.fuenteActual || 'CentralBridge leyendo LocalStorage del LAB.'}</p>
           <div className="panel-lateral-info">
@@ -486,14 +514,14 @@ export default function OperacionesCentrales({
         </div>
 
         <div className="ai-control-panel">
-          <span>ELAN AI Control Center</span>
+          <span>ELAN KAVTORÉ Control Center</span>
           <h4>Preparado</h4>
-          <p>Base lista para automatizar clasificación de mensajes, estado de leads, reportes y seguimiento comercial.</p>
+          <p>Base lista para evolucionar a Knowledge Core, AI Router, salas especializadas y asistencia operativa de ELANKAV.</p>
           <div className="ai-checklist">
-            <small>Clasificación WhatsApp</small>
-            <small>Resumen ejecutivo</small>
-            <small>Alertas automáticas</small>
-            <small>Recomendaciones comerciales</small>
+            <small>Knowledge Core</small>
+            <small>AI Router</small>
+            <small>Salas especializadas</small>
+            <small>Escalamiento humano</small>
           </div>
         </div>
       </div>
@@ -522,7 +550,7 @@ export default function OperacionesCentrales({
                 <div className="alerta-icono">✅</div>
                 <div>
                   <h4>Sin alertas críticas</h4>
-                  <p>El LAB está listo para recibir más datos reales del CRM Central.</p>
+                  <p>ELAN KAVTORÉ está listo para recibir más datos reales desde CRM CENTRAL.</p>
                 </div>
                 <span className="alerta-nivel">OK</span>
               </div>

@@ -4,6 +4,7 @@ import {
   cargarDatosCRM,
   calcularEstadoGlobal,
   construirReporteEjecutivo,
+  dinero,
 } from './core/CentralBridge';
 
 export default function App() {
@@ -18,9 +19,13 @@ export default function App() {
     <div className="app">
       <div className="core-shell">
         <div className="core-hero">
-          <span className="core-badge">CentralBridge activo</span>
-          <h1>ELANKAV CORE</h1>
-          <p>Consola ejecutiva conectada al CRM CENTRAL vía LocalStorage.</p>
+          <span className="core-badge">CentralBridge activo · ELAN KAVTORÉ OS</span>
+          <h1>ELAN KAVTORÉ</h1>
+          <p>
+            Asistente operativo inteligente de ELANKAV. Lee el CRM CENTRAL por medio de
+            CentralBridge y convierte operaciones, clientes, leads, proveedores y reportes
+            en decisiones ejecutivas.
+          </p>
 
           <div className="metricas-grid">
             <div className="metrica-card">
@@ -35,9 +40,7 @@ export default function App() {
 
             <div className="metrica-card">
               <span>Ingresos visibles</span>
-              <strong>
-                C$ {estadoGlobal.ingresosVisibles.toLocaleString('es-NI')}
-              </strong>
+              <strong>{dinero(estadoGlobal.ingresosVisibles)}</strong>
             </div>
           </div>
         </div>
