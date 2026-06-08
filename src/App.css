@@ -1470,3 +1470,165 @@ tr:hover td {
     margin-bottom: 14px;
   }
 }
+
+
+/* =========================================================
+   HITO-0013.4 — ELAN KAVTORÉ NAVEGACIÓN GESTUAL
+   Flechas, indicador 1/8 y swipe horizontal móvil
+   ========================================================= */
+
+.kavtore-swipe-shell {
+  touch-action: pan-y;
+}
+
+.kavtore-screen-control {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.11), transparent 34%),
+    rgba(8, 13, 25, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.kavtore-screen-control button {
+  min-height: 44px;
+  padding: 11px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: rgba(15, 23, 42, 0.76);
+  color: #dbeafe;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+
+.kavtore-screen-control button:first-child {
+  justify-self: start;
+}
+
+.kavtore-screen-control button:last-child {
+  justify-self: end;
+}
+
+.kavtore-screen-control > div {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  text-align: center;
+  min-width: 98px;
+}
+
+.kavtore-screen-control strong {
+  color: #f8fafc;
+  font-size: 15px;
+  line-height: 1.1;
+}
+
+.kavtore-screen-control small {
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.kavtore-screen-dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin-bottom: 18px;
+}
+
+.kavtore-screen-dots button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.78);
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.kavtore-screen-dots button.kavtore-dot-activo {
+  width: 38px;
+  color: #082f49;
+  background: linear-gradient(135deg, #7dd3fc, #f8fafc);
+  border-color: rgba(125, 211, 252, 0.88);
+  box-shadow: 0 12px 28px rgba(14, 165, 233, 0.22);
+}
+
+.kavtore-active-view {
+  animation: kavtoreViewIn 0.22s ease both;
+}
+
+.kavtore-view-section {
+  animation: kavtoreViewIn 0.22s ease both;
+}
+
+@keyframes kavtoreViewIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .kavtore-screen-control {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .kavtore-screen-control > div {
+    order: -1;
+    width: 100%;
+    padding: 6px 0;
+  }
+
+  .kavtore-screen-control button {
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .kavtore-screen-control button:first-child,
+  .kavtore-screen-control button:last-child {
+    justify-self: stretch;
+  }
+
+  .kavtore-screen-dots {
+    position: sticky;
+    top: 84px;
+    z-index: 35;
+    padding: 8px;
+    margin-bottom: 12px;
+    border-radius: 999px;
+    background: rgba(2, 6, 23, 0.68);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(14px);
+  }
+
+  .kavtore-screen-dots button {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+  }
+
+  .kavtore-screen-dots button.kavtore-dot-activo {
+    width: 32px;
+  }
+}
