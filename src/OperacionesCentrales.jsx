@@ -5,6 +5,7 @@ import './App.css';
 
 export default function OperacionesCentrales() {
   const [vistaActiva, setVistaActiva] = useState('home');
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   const fecha = new Date();
 
@@ -430,19 +431,82 @@ export default function OperacionesCentrales() {
         </div>
       </section>
 
-      <nav className="executive-nav" aria-label="Navegación ELAN KAVTORÉ">
-        {salas.map((sala) => (
+      <header className="kavtore-app-header">
+        <button
+          type="button"
+          className="kavtore-logo-menu"
+          onClick={() => setMenuAbierto(true)}
+          aria-label="Abrir menú ELAN KAVTORÉ"
+        >
+          <span className="kavtore-logo-lines" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+        </button>
+
+        <div className="kavtore-app-title">
+          <strong>{salaActiva.titulo}</strong>
+          <small>{salaActiva.tipo} · {salaActiva.nombre}</small>
+        </div>
+      </header>
+
+      {menuAbierto && (
+        <div className="kavtore-menu-layer">
           <button
-            key={sala.id}
             type="button"
-            onClick={() => setVistaActiva(sala.id)}
-            className={vistaActiva === sala.id ? 'kavtore-nav-activa' : ''}
-          >
-            <span>{sala.icono}</span>
-            {sala.nombre}
-          </button>
-        ))}
-      </nav>
+            className="kavtore-menu-backdrop"
+            aria-label="Cerrar menú"
+            onClick={() => setMenuAbierto(false)}
+          />
+
+          <aside className="kavtore-sidebar" aria-label="Menú ELAN KAVTORÉ">
+            <div className="kavtore-sidebar-head">
+              <button
+                type="button"
+                className="kavtore-logo-menu kavtore-logo-menu-sidebar"
+                onClick={() => setMenuAbierto(false)}
+                aria-label="Cerrar menú ELAN KAVTORÉ"
+              >
+                <span className="kavtore-logo-lines" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </button>
+
+              <div>
+                <strong>ELAN KAVTORÉ</strong>
+                <small>Sistema Operativo</small>
+              </div>
+            </div>
+
+            <div className="kavtore-sidebar-list">
+              {salas.map((sala) => (
+                <button
+                  key={sala.id}
+                  type="button"
+                  className={
+                    vistaActiva === sala.id
+                      ? 'kavtore-sidebar-item kavtore-sidebar-item-activo'
+                      : 'kavtore-sidebar-item'
+                  }
+                  onClick={() => {
+                    setVistaActiva(sala.id);
+                    setMenuAbierto(false);
+                  }}
+                >
+                  <span>{sala.icono}</span>
+                  <div>
+                    <strong>{sala.nombre}</strong>
+                    <small>{sala.tipo}</small>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </aside>
+        </div>
+      )}
 
       {vistaActiva === 'home' ? renderHome() : renderSala()}
     </main>

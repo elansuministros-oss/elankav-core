@@ -1218,3 +1218,255 @@ tr:hover td {
     text-align: center;
   }
 }
+
+
+/* =========================================================
+   HITO-0013.3 — ELAN KAVTORÉ SIDEBAR MÓVIL
+   Menú plegable con símbolo ELAN como acceso principal
+   ========================================================= */
+
+.kavtore-app-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding: 14px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 34%),
+    rgba(8, 13, 25, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.kavtore-logo-menu {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  min-width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 18px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.26), transparent 42%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.96));
+  box-shadow:
+    0 18px 45px rgba(14, 165, 233, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.kavtore-logo-menu:hover {
+  border-color: rgba(125, 211, 252, 0.62);
+  transform: translateY(-1px);
+}
+
+.kavtore-logo-lines {
+  display: grid;
+  gap: 5px;
+  width: 25px;
+}
+
+.kavtore-logo-lines i {
+  display: block;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7dd3fc, #f8fafc);
+  box-shadow: 0 0 16px rgba(125, 211, 252, 0.26);
+}
+
+.kavtore-logo-lines i:nth-child(1) {
+  width: 24px;
+}
+
+.kavtore-logo-lines i:nth-child(2) {
+  width: 18px;
+  margin-left: 7px;
+}
+
+.kavtore-logo-lines i:nth-child(3) {
+  width: 24px;
+}
+
+.kavtore-app-title {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.kavtore-app-title strong {
+  color: #f8fafc;
+  font-size: clamp(18px, 3vw, 24px);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.kavtore-app-title small {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.kavtore-menu-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+}
+
+.kavtore-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(2, 6, 23, 0.66);
+  backdrop-filter: blur(10px);
+}
+
+.kavtore-sidebar {
+  position: relative;
+  z-index: 101;
+  width: min(86vw, 360px);
+  height: 100vh;
+  padding: 18px;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(8, 13, 25, 0.98), rgba(2, 6, 23, 0.98));
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 30px 0 90px rgba(0, 0, 0, 0.42);
+}
+
+.kavtore-sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.kavtore-logo-menu-sidebar {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+}
+
+.kavtore-sidebar-head strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 18px;
+  letter-spacing: -0.04em;
+}
+
+.kavtore-sidebar-head small {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.kavtore-sidebar-list {
+  display: grid;
+  gap: 10px;
+}
+
+.kavtore-sidebar-item {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px;
+  border-radius: 17px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(15, 23, 42, 0.74);
+  color: #e2e8f0;
+  text-align: left;
+}
+
+.kavtore-sidebar-item:hover,
+.kavtore-sidebar-item-activo {
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 40%),
+    rgba(14, 165, 233, 0.14);
+  border-color: rgba(56, 189, 248, 0.34);
+}
+
+.kavtore-sidebar-item > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.72);
+  font-size: 19px;
+}
+
+.kavtore-sidebar-item strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 15px;
+  line-height: 1.15;
+}
+
+.kavtore-sidebar-item small {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@media (min-width: 980px) {
+  .kavtore-app-header {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .kavtore-app-header {
+    position: sticky;
+    top: 10px;
+    z-index: 40;
+    margin-bottom: 14px;
+    padding: 12px;
+  }
+
+  .kavtore-logo-menu {
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    border-radius: 16px;
+  }
+
+  .kavtore-app-title strong {
+    font-size: 18px;
+  }
+
+  .kavtore-app-title small {
+    font-size: 10px;
+  }
+
+  .kavtore-menu-layer {
+    grid-template-columns: 1fr;
+  }
+
+  .kavtore-sidebar {
+    width: min(88vw, 340px);
+    padding: 16px;
+  }
+
+  .executive-status-band {
+    margin-bottom: 14px;
+  }
+}
