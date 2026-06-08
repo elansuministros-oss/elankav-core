@@ -116,7 +116,10 @@ export default function OperacionesCentrales() {
     const nuevoIndice = salas.findIndex((sala) => sala.id === id);
     const direccion = nuevoIndice > indiceActivo ? 'izquierda' : 'derecha';
     cambiarVista(nuevoIndice, direccion);
-    setMenuAbierto(false);
+
+    if (typeof window !== 'undefined' && window.innerWidth < 980) {
+      setMenuAbierto(false);
+    }
   };
 
   const manejarTouchStart = (evento) => {
@@ -471,13 +474,15 @@ export default function OperacionesCentrales() {
   );
 
   return (
-    <main className="executive-center">
+    <main
+      className={menuAbierto ? 'executive-center kavtore-desktop-menu-open' : 'executive-center'}
+    >
       <header className="kavtore-app-header">
         <button
           type="button"
           className="kavtore-logo-menu"
-          onClick={() => setMenuAbierto(true)}
-          aria-label="Abrir menú ELAN KAVTORÉ"
+          onClick={() => setMenuAbierto((abierto) => !abierto)}
+          aria-label="Abrir o cerrar menú ELAN KAVTORÉ"
         >
           {renderLogoElan()}
         </button>
