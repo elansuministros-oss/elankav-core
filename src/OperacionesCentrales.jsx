@@ -1,9 +1,11 @@
 // src/OperacionesCentrales.jsx
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import './App.css';
 
 export default function OperacionesCentrales() {
+  const [vistaActiva, setVistaActiva] = useState('home');
+
   const fecha = new Date();
 
   const saludo =
@@ -14,161 +16,308 @@ export default function OperacionesCentrales() {
       : 'Buenas noches Erick.';
 
   const salas = [
-    'KAVTORÉ CEO',
-    'KAVTORÉ Comercial',
-    'KAVTORÉ Visual',
-    'KAVTORÉ Producción',
-    'KAVTORÉ Marketing',
-    'KAVTORÉ Financiero',
-    'KAVTORÉ Proveedores',
+    {
+      id: 'home',
+      nombre: 'Home',
+      icono: '🏠',
+      tipo: 'Inicio',
+      titulo: 'ELAN KAVTORÉ HOME',
+      descripcion:
+        'Resumen ejecutivo corto para operar desde móvil sin scroll excesivo.',
+    },
+    {
+      id: 'ceo',
+      nombre: 'CEO',
+      icono: '📊',
+      tipo: 'Dirección',
+      titulo: 'KAVTORÉ CEO',
+      descripcion:
+        'Vista ejecutiva para revisar operación global, prioridades y decisiones.',
+    },
+    {
+      id: 'comercial',
+      nombre: 'Comercial',
+      icono: '💰',
+      tipo: 'Ventas',
+      titulo: 'KAVTORÉ Comercial',
+      descripcion:
+        'Control de leads, cotizaciones, clientes, ventas y seguimiento comercial.',
+    },
+    {
+      id: 'visual',
+      nombre: 'Visual',
+      icono: '🎨',
+      tipo: 'Diseño',
+      titulo: 'KAVTORÉ Visual',
+      descripcion:
+        'Gestión de rotulación, impresión, diseño, renders, artes y producción visual.',
+    },
+    {
+      id: 'produccion',
+      nombre: 'Producción',
+      icono: '🏭',
+      tipo: 'Taller',
+      titulo: 'KAVTORÉ Producción',
+      descripcion:
+        'Control de órdenes de trabajo, materiales, procesos, montaje y entregas.',
+    },
+    {
+      id: 'marketing',
+      nombre: 'Marketing',
+      icono: '📣',
+      tipo: 'Contenido',
+      titulo: 'KAVTORÉ Marketing',
+      descripcion:
+        'Planificación de campañas, publicaciones, mensajes, ofertas y captación.',
+    },
+    {
+      id: 'financiero',
+      nombre: 'Financiero',
+      icono: '📈',
+      tipo: 'Dinero',
+      titulo: 'KAVTORÉ Financiero',
+      descripcion:
+        'Control de ingresos, egresos, cobros, deudas, utilidad, IVA y flujo.',
+    },
+    {
+      id: 'proveedores',
+      nombre: 'Proveedores',
+      icono: '🚚',
+      tipo: 'Compras',
+      titulo: 'KAVTORÉ Proveedores',
+      descripcion:
+        'Validación de proveedor, precio, existencia y tiempo de entrega antes de vender.',
+    },
   ];
 
-  const alertas = [
+  const salaActiva = useMemo(
+    () => salas.find((sala) => sala.id === vistaActiva) || salas[0],
+    [vistaActiva]
+  );
+
+  const kpisHome = [
+    {
+      label: 'CRM CENTRAL',
+      valor: 'Activo',
+      detalle: 'Cadena operativa estable.',
+    },
+    {
+      label: 'Bridge',
+      valor: 'Listo',
+      detalle: 'Preparado para integración.',
+    },
+    {
+      label: 'Unidades',
+      valor: '4',
+      detalle: 'ELANPET, Visual, Center, Home.',
+    },
+  ];
+
+  const alertasCriticas = [
     {
       titulo: 'Validación comercial obligatoria',
-      detalle: 'Proveedor, precio, existencia y tiempo de entrega antes de vender.',
+      detalle:
+        'Proveedor, precio, existencia y tiempo de entrega antes de vender.',
       nivel: 'Crítico',
     },
     {
-      titulo: 'Catálogo ≠ inventario real',
-      detalle: 'Ningún producto externo debe venderse sin confirmar disponibilidad.',
+      titulo: 'Catálogo no es inventario',
+      detalle:
+        'Ningún producto externo debe ofrecerse como disponible sin confirmar.',
       nivel: 'Alto',
-    },
-    {
-      titulo: 'ELANHOME absorbe solar',
-      detalle: 'Energía solar, iluminación, domótica y seguridad pasan dentro de ELANHOME.',
-      nivel: 'Estructural',
     },
   ];
 
-  const recomendaciones = [
+  const recomendacionesHome = [
     {
-      titulo: 'Conectar Bridge Central',
-      detalle: 'Prioridad técnica sin reconstruir el CRM CENTRAL.',
-      estado: 'Prioridad',
-    },
-    {
-      titulo: 'Mantener ELANPET como primera unidad',
-      detalle: 'Usar ELANPET como modelo base para las demás unidades.',
+      titulo: 'Mantener Home corto',
+      detalle:
+        'Cada sala debe operar por separado para evitar scroll largo en móvil.',
       estado: 'Activo',
     },
     {
-      titulo: 'Preparar ELANVISUAL',
-      detalle: 'Rotulación, impresión, acrílicos, CNC, láser y fachadas.',
+      titulo: 'Iniciar con KAVTORÉ CEO',
+      detalle:
+        'Será la primera sala funcional con indicadores y decisiones generales.',
       estado: 'Siguiente',
     },
   ];
 
-  const acciones = [
-    {
-      comando: 'Analizar operación',
-      descripcion: 'Revisar estado global del negocio y detectar prioridades.',
+  const datosPorSala = {
+    ceo: {
+      foco: 'Dirección general',
+      objetivo:
+        'Revisar ventas, producción, cobros, leads, alertas y prioridades desde una sola vista.',
+      indicadores: [
+        ['Estado global', 'Operativo'],
+        ['Prioridad', 'Bridge Central'],
+        ['Riesgo', 'Validación comercial'],
+        ['Acción', 'Clasificar operación'],
+      ],
+      acciones: [
+        'Revisar estado global del negocio.',
+        'Detectar prioridades del día.',
+        'Ordenar decisiones por urgencia.',
+        'Coordinar salas operativas.',
+      ],
     },
-    {
-      comando: 'Preparar cotización',
-      descripcion: 'Validar materiales, proveedor, costos, margen y entrega.',
+    comercial: {
+      foco: 'Ventas y seguimiento',
+      objetivo:
+        'Controlar leads, cotizaciones, clientes, pedidos aprobados y oportunidades.',
+      indicadores: [
+        ['Leads', 'Pendiente'],
+        ['Cotizaciones', 'En proceso'],
+        ['Clientes', 'Activos'],
+        ['Seguimiento', 'Necesario'],
+      ],
+      acciones: [
+        'Clasificar lead por unidad de negocio.',
+        'Preparar cotización con margen real.',
+        'Dar seguimiento a clientes pendientes.',
+        'Separar oportunidad fría, tibia y caliente.',
+      ],
     },
-    {
-      comando: 'Clasificar lead',
-      descripcion: 'Asignar unidad, servicio, origen, cliente y estado.',
+    visual: {
+      foco: 'Diseño y rotulación',
+      objetivo:
+        'Coordinar diseño gráfico, renders, rotulación, impresión, acrílicos, PVC, CNC y láser.',
+      indicadores: [
+        ['Artes', 'Por revisar'],
+        ['Renders', 'Pendientes'],
+        ['Producción visual', 'Activa'],
+        ['Unidad', 'ELANVISUAL'],
+      ],
+      acciones: [
+        'Preparar propuesta visual.',
+        'Verificar medidas reales.',
+        'Validar materiales producibles.',
+        'Separar estándar y premium.',
+      ],
     },
-    {
-      comando: 'Revisar producción',
-      descripcion: 'Evaluar órdenes activas, materiales y tiempos reales.',
+    produccion: {
+      foco: 'Taller y órdenes',
+      objetivo:
+        'Controlar órdenes de trabajo, materiales, tiempos reales, montaje y entregas.',
+      indicadores: [
+        ['Órdenes', 'Activas'],
+        ['Materiales', 'Por validar'],
+        ['Montaje', 'Según agenda'],
+        ['Riesgo', 'Tiempo real'],
+      ],
+      acciones: [
+        'Revisar órdenes activas.',
+        'Validar existencia de material.',
+        'Confirmar responsables.',
+        'Ordenar producción por prioridad.',
+      ],
     },
-  ];
+    marketing: {
+      foco: 'Captación y contenido',
+      objetivo:
+        'Organizar campañas, publicaciones, ofertas, mensajes y presencia comercial.',
+      indicadores: [
+        ['Campañas', 'Planeación'],
+        ['Contenido', 'Pendiente'],
+        ['Redes', 'Activas'],
+        ['WhatsApp', 'Entrada común'],
+      ],
+      acciones: [
+        'Preparar mensaje comercial.',
+        'Crear contenido por unidad.',
+        'Asignar origen del lead.',
+        'Medir respuesta de campañas.',
+      ],
+    },
+    financiero: {
+      foco: 'Control financiero',
+      objetivo:
+        'Revisar ingresos, egresos, cobros, deudas, utilidad, IVA y flujo de caja.',
+      indicadores: [
+        ['Cobros', 'Por revisar'],
+        ['Egresos', 'Control diario'],
+        ['Deudas', 'Seguimiento'],
+        ['Utilidad', 'Pendiente cálculo'],
+      ],
+      acciones: [
+        'Registrar ingreso o egreso.',
+        'Separar gasto personal y operativo.',
+        'Revisar cuentas por cobrar.',
+        'Medir utilidad real por proyecto.',
+      ],
+    },
+    proveedores: {
+      foco: 'Compras y validación',
+      objetivo:
+        'Confirmar proveedores, precios, existencia, tiempo de entrega y condiciones antes de vender.',
+      indicadores: [
+        ['Proveedor', 'Debe validarse'],
+        ['Precio', 'Debe confirmarse'],
+        ['Existencia', 'No asumir'],
+        ['Entrega', 'Confirmar fecha'],
+      ],
+      acciones: [
+        'Consultar proveedor antes de cotizar.',
+        'Confirmar precio actualizado.',
+        'Validar inventario real.',
+        'Registrar condiciones de entrega.',
+      ],
+    },
+  };
 
-  return (
-    <main className="executive-center">
-      <section className="executive-status-band">
-        <div>
-          <span>ELANKAV CORE · PDR-0002 · ELAN KAVTORÉ OS</span>
-          <strong>{saludo}</strong>
-          <p>
-            Soy ELAN KAVTORÉ. Sistema Operativo Inteligente de ELANKAV y
-            Director Operativo Digital para coordinar ventas, producción,
-            finanzas, proveedores, marketing, diseño y crecimiento.
-          </p>
-        </div>
+  const datosSala =
+    datosPorSala[vistaActiva] || datosPorSala.ceo;
 
-        <div className="status-band-grid">
-          <small>Build correcto</small>
-          <small>GitHub actualizado</small>
-          <small>Vercel publicado</small>
-          <small>Commit seguro: 3572c73</small>
-        </div>
-      </section>
-
+  const renderHome = () => (
+    <>
       <section className="ceo-command-layout">
         <article className="ceo-hero-card">
           <span>Centro de comando</span>
           <strong>ELAN KAVTORÉ</strong>
           <p>
-            Orquestador de IA y cerebro operativo transversal. No es chatbot,
-            no es vendedor y no es secretaria: analiza, coordina, recomienda y
-            prepara ejecución real.
+            Orquestador de IA y Director Operativo Digital de ELANKAV. Esta
+            vista queda corta para móvil; las salas operativas se abren por
+            separado desde el menú.
           </p>
 
           <div className="ceo-hero-kpis">
-            <div>
-              <small>CRM CENTRAL</small>
-              <b>Activo</b>
-            </div>
-            <div>
-              <small>Bridge</small>
-              <b>Listo</b>
-            </div>
-            <div>
-              <small>Unidades</small>
-              <b>4</b>
-            </div>
+            {kpisHome.map((kpi) => (
+              <div key={kpi.label}>
+                <small>{kpi.label}</small>
+                <b>{kpi.valor}</b>
+              </div>
+            ))}
           </div>
         </article>
 
         <div className="ceo-side-grid">
-          <article className="ceo-mini-card">
-            <span>Estado</span>
-            <strong>Operativo</strong>
-            <small>El CORE está estable y publicado.</small>
-          </article>
+          {kpisHome.map((kpi) => (
+            <article className="ceo-mini-card" key={kpi.label}>
+              <span>{kpi.label}</span>
+              <strong>{kpi.valor}</strong>
+              <small>{kpi.detalle}</small>
+            </article>
+          ))}
 
           <article className="ceo-mini-card">
-            <span>Fase</span>
-            <strong>0013.1</strong>
-            <small>Rediseño visual de KAVTORÉ HOME.</small>
-          </article>
-
-          <article className="ceo-mini-card">
-            <span>Regla</span>
-            <strong>Validar</strong>
-            <small>Proveedor, precio, existencia y entrega.</small>
-          </article>
-
-          <article className="ceo-mini-card">
-            <span>Sistema</span>
-            <strong>OS</strong>
-            <small>Base para decisiones operativas reales.</small>
+            <span>Modo móvil</span>
+            <strong>Activo</strong>
+            <small>Home corto y navegación por salas.</small>
           </article>
         </div>
       </section>
-
-      <nav className="executive-nav">
-        {salas.map((sala) => (
-          <span key={sala}>{sala}</span>
-        ))}
-      </nav>
 
       <section className="operational-intelligence-grid">
         <div className="centro-alertas">
           <div className="bloque-header">
             <div>
               <span>Centro de alertas</span>
-              <h2>Riesgos operativos</h2>
+              <h2>Riesgos críticos</h2>
             </div>
           </div>
 
           <div className="alertas-lista">
-            {alertas.map((alerta) => (
+            {alertasCriticas.map((alerta) => (
               <article className="alerta-card" key={alerta.titulo}>
                 <div className="alerta-icono">⚠</div>
                 <div>
@@ -184,13 +333,13 @@ export default function OperacionesCentrales() {
         <div className="actividad-reciente">
           <div className="bloque-header">
             <div>
-              <span>Acciones recomendadas</span>
-              <h2>Prioridades</h2>
+              <span>Recomendaciones</span>
+              <h2>Próximas decisiones</h2>
             </div>
           </div>
 
           <div className="actividad-lista">
-            {recomendaciones.map((item) => (
+            {recomendacionesHome.map((item) => (
               <article className="actividad-item" key={item.titulo}>
                 <time>{item.estado}</time>
                 <div>
@@ -202,74 +351,100 @@ export default function OperacionesCentrales() {
           </div>
         </div>
       </section>
+    </>
+  );
 
-      <section className="centros-grid centros-grid-ejecutivo">
-        {salas.map((sala) => (
-          <article className="centro-card centro-card-ejecutivo" key={sala}>
-            <div className="centro-card-top">
-              <div className="centro-icono">✦</div>
-              <span>Operativa</span>
+  const renderSala = () => (
+    <section className="detalle-layout detalle-layout-ejecutivo">
+      <div className="global-state-panel">
+        <span>{salaActiva.tipo}</span>
+        <h4>{salaActiva.titulo}</h4>
+        <p>{salaActiva.descripcion}</p>
+
+        <div className="lista-compacta">
+          <article className="compacto-item">
+            <div>
+              <strong>Foco operativo</strong>
+              <p>{datosSala.foco}</p>
             </div>
-
-            <h3>{sala}</h3>
-            <p>
-              Sala especializada para análisis, decisión, seguimiento y
-              ejecución dentro del sistema ELAN KAVTORÉ.
-            </p>
-
-            <div className="centro-datos centro-datos-ejecutivo">
-              <div>
-                <small>Estado</small>
-                <strong>Preparada</strong>
-              </div>
-              <div>
-                <small>Uso</small>
-                <strong>Operativo</strong>
-              </div>
-            </div>
+            <span>Activo</span>
           </article>
-        ))}
-      </section>
 
-      <section className="detalle-layout detalle-layout-ejecutivo">
-        <div className="global-state-panel">
-          <span>Consola operativa</span>
-          <h4>Acciones base</h4>
+          <article className="compacto-item">
+            <div>
+              <strong>Objetivo</strong>
+              <p>{datosSala.objetivo}</p>
+            </div>
+            <span>Control</span>
+          </article>
+
+          {datosSala.acciones.map((accion) => (
+            <article className="compacto-item" key={accion}>
+              <div>
+                <strong>Acción</strong>
+                <p>{accion}</p>
+              </div>
+              <span>Base</span>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <aside className="ai-control-panel">
+        <span>Indicadores</span>
+        <h4>{salaActiva.nombre}</h4>
+        <p>
+          Panel inicial de sala. En el siguiente hito estos indicadores se
+          conectarán con datos reales del CRM CENTRAL y Bridge Central.
+        </p>
+
+        <div className="ai-checklist">
+          {datosSala.indicadores.map(([label, valor]) => (
+            <small key={label}>
+              {label}: {valor}
+            </small>
+          ))}
+        </div>
+      </aside>
+    </section>
+  );
+
+  return (
+    <main className="executive-center">
+      <section className="executive-status-band">
+        <div>
+          <span>ELANKAV CORE · HITO-0013.2 · NAVEGACIÓN MÓVIL</span>
+          <strong>{saludo}</strong>
           <p>
-            Comandos iniciales del Director Operativo Digital para convertir
-            datos del CRM y del Bridge en decisiones ejecutables.
+            Soy ELAN KAVTORÉ. Sistema Operativo Inteligente de ELANKAV. El
+            control ahora funciona por salas para evitar scroll infinito en
+            móvil.
           </p>
-
-          <div className="lista-compacta">
-            {acciones.map((accion) => (
-              <article className="compacto-item" key={accion.comando}>
-                <div>
-                  <strong>{accion.comando}</strong>
-                  <p>{accion.descripcion}</p>
-                </div>
-                <span>Activo</span>
-              </article>
-            ))}
-          </div>
         </div>
 
-        <aside className="ai-control-panel">
-          <span>AI Router</span>
-          <h4>Orquestador IA</h4>
-          <p>
-            ELAN KAVTORÉ debe coordinar texto, programación, render, diseño,
-            búsqueda y análisis sin depender de una sola IA.
-          </p>
-
-          <div className="ai-checklist">
-            <small>Texto operativo</small>
-            <small>Programación</small>
-            <small>Render y diseño</small>
-            <small>Búsqueda y análisis</small>
-            <small>Decisiones ejecutivas</small>
-          </div>
-        </aside>
+        <div className="status-band-grid">
+          <small>Commit base: 9b7b945</small>
+          <small>Home corto</small>
+          <small>Salas separadas</small>
+          <small>Modo móvil primero</small>
+        </div>
       </section>
+
+      <nav className="executive-nav" aria-label="Navegación ELAN KAVTORÉ">
+        {salas.map((sala) => (
+          <button
+            key={sala.id}
+            type="button"
+            onClick={() => setVistaActiva(sala.id)}
+            className={vistaActiva === sala.id ? 'kavtore-nav-activa' : ''}
+          >
+            <span>{sala.icono}</span>
+            {sala.nombre}
+          </button>
+        ))}
+      </nav>
+
+      {vistaActiva === 'home' ? renderHome() : renderSala()}
     </main>
   );
 }
