@@ -1,7 +1,10 @@
 const VERIFY_TOKEN = 'ELANKAV_VERIFY_2026';
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY;
 
 function clasificarMensajeWhatsApp(mensaje = '') {
   const texto = mensaje.toLowerCase();
