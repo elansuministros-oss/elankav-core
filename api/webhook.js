@@ -1,11 +1,99 @@
-import { clasificarMensajeWhatsApp } from '../src/ai/WhatsAppAIEngine.js';
-import { crearLeadDesdeWhatsApp } from '../src/ai/CRMLeadBridge.js';
-
 const VERIFY_TOKEN = 'ELANKAV_VERIFY_2026';
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+
+function clasificarMensajeWhatsApp(mensaje = '') {
+  const texto = mensaje.toLowerCase();
+
+  let unidadDetectada = 'Sin clasificar';
+  let servicioDetectado = 'Consulta general';
+  let prioridad = 'Media';
+
+  if (texto.includes('perro') || texto.includes('gato') || texto.includes('mascota')) {
+    unidadDetectada = 'ELANPET';
+    servicioDetectado = 'Producto para mascota';
+  }
+
+  if (texto.includes('rótulo') || texto.includes('rotulo') || texto.includes('banner') || texto.includes('vinil')) {
+    unidadDetectada = 'ELANVISUAL';
+    servicioDetectado = 'Rotulación / impresión';
+  }
+
+  if (texto.includes('computadora') || texto.includes('curso') || texto.includes('diseño gráfico')) {
+    unidadDetectada = 'ELANCENTER';
+    servicioDetectado = 'Centro tecnológico / diseño';
+  }
+
+  if (texto.includes('solar') || texto.includes('lámpara') || texto.includes('decoración') || texto.includes('casa')) {
+    unidadDetectada = 'ELANHOME';
+    servicioDetectado = 'Hogar / decoración / energía';
+  }
+
+  if (texto.includes('urgente') || texto.includes('hoy') || texto.includes('mañana')) {
+    prioridad = 'Alta';
+  }
+
+  return {
+    unidadDetectada,
+    servicioDetectado,
+    tipoCliente: 'Prospecto',
+    estadoLead: 'Nuevo',
+    prioridad,
+    respuestaSugerida:
+      'Hola, gracias por escribir a ELANKAV. Ya recibimos tu solicitud. Para ayudarte mejor, compártenos medidas, ubicación y una foto de referencia si aplica.',
+  };
+}
+
+function crearLeadDesdeWhatsApp(resultado = {}) {
+  return {
+    origen: 'WhatsApp Cloud API',
+    nombre: resultado.nombreCliente || 'Cliente WhatsApp',
+    whatsapp: resultado.telefono || resultado.waId || '',
+    mensaje: resultado.mensajeOriginal || '',
+    unidad_negocio: resultado.unidadDetectada || 'Sin clasificar',
+    servicio_solicitado: resultado.servicioDetectado || 'Consulta general',
+    tipo_cliente: resultado.tipoCliente || 'Prospecto',
+    estado: resultado.estadoLead || 'Nuevo',
+    prioridad: resultado.prioridad || 'Media',
+    respuesta_sugerida: resultado.respuestaSugerida || '',
+    mensaje_original: resultado.mensajeOriginal || '',
+    creado_por: 'ELAN AI',
+    listo_para_crm: true,
+    procesado: false,
+  };
+}
+
+async function guardarLeadEnSupabase(lead) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.warn('ELAN AI / Supabase no configurado en variables de entorno.');
+    return { ok: false, error: 'Supabase no configurado' };
+  }
+
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/leads_whatsapp`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(lead),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error('ELAN AI / Error guardando lead en Supabase:', data);
+    return { ok: false, error: data };
+  }
+
+  console.log('ELAN AI / Lead guardado en Supabase:', data);
+  return { ok: true, data };
+}
 
 function extraerEventosWhatsApp(body = {}) {
   const eventos = [];
-
   const entries = Array.isArray(body.entry) ? body.entry : [];
 
   entries.forEach((entry) => {
@@ -78,7 +166,7 @@ function extraerEventosWhatsApp(body = {}) {
   return eventos;
 }
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -89,11 +177,6 @@ export default function handler(req, res) {
       return res.status(200).send(challenge);
     }
 
-    console.warn('ELAN AI / Verificación rechazada', {
-      mode,
-      tokenRecibido: token,
-    });
-
     return res.status(403).send('Token de verificación inválido');
   }
 
@@ -101,10 +184,10 @@ export default function handler(req, res) {
     try {
       const eventos = extraerEventosWhatsApp(req.body);
       const mensajes = eventos.filter((evento) => evento.tipoEvento === 'mensaje');
-      const statuses = eventos.filter((evento) => evento.tipoEvento === 'status');
-      const sinMensaje = eventos.filter((evento) => evento.tipoEvento === 'sin_mensaje');
 
-      const leads = mensajes.map((item) => {
+      const leads = [];
+
+      for (const item of mensajes) {
         const analisis = clasificarMensajeWhatsApp(item.mensaje);
 
         const lead = crearLeadDesdeWhatsApp({
@@ -112,62 +195,25 @@ export default function handler(req, res) {
           telefono: item.telefono,
           waId: item.waId,
           nombreCliente: item.nombreCliente,
-          mensajeId: item.mensajeId,
-          tipoMensaje: item.tipoMensaje,
-          phoneNumberId: item.phoneNumberId,
-          displayPhoneNumber: item.displayPhoneNumber,
-          wabaId: item.wabaId,
           mensajeOriginal: item.mensaje,
-          origen: 'WhatsApp Cloud API',
         });
 
-        console.log(
-          'ELAN AI / LEAD GENERADO:',
-          JSON.stringify(
-            {
-              mensajeId: item.mensajeId,
-              telefono: item.telefono,
-              waId: item.waId,
-              nombreCliente: item.nombreCliente,
-              mensaje: item.mensaje,
-              analisis,
-              lead,
-            },
-            null,
-            2
-          )
-        );
+        const guardado = await guardarLeadEnSupabase(lead);
 
-        return lead;
-      });
-
-      console.log(
-        'ELAN AI / WhatsApp Webhook RESUMEN:',
-        JSON.stringify(
-          {
-            recibido: true,
-            tipoBody: req.body?.object || 'desconocido',
-            totalEventos: eventos.length,
-            totalMensajes: mensajes.length,
-            totalStatuses: statuses.length,
-            totalSinMensaje: sinMensaje.length,
-            totalLeads: leads.length,
-            eventos,
-          },
-          null,
-          2
-        )
-      );
+        leads.push({
+          ...lead,
+          guardadoSupabase: guardado.ok,
+          errorSupabase: guardado.error || null,
+        });
+      }
 
       return res.status(200).json({
         ok: true,
         recibido: true,
         sistema: 'ELAN AI',
-        destino: 'CRM CENTRAL',
+        destino: 'Supabase / CRM CENTRAL',
         totalEventos: eventos.length,
         totalMensajes: mensajes.length,
-        totalStatuses: statuses.length,
-        totalSinMensaje: sinMensaje.length,
         totalLeads: leads.length,
         leads,
       });
