@@ -4,7 +4,8 @@ export const unidadesGrupo = [
     nombre: 'ELANPET',
     codigo: 'PET',
     estado: 'Operativo',
-    descripcion: 'Mascotas, veterinarias, afiliados, pedidos, QR y catálogo conectado al ecosistema.',
+    descripcion:
+      'Mascotas, veterinarias, afiliados, pedidos, QR, catálogo personalizado, promociones y comisión automática.',
     leads: 42,
     clientes: 18,
     ingresos: 12500,
@@ -16,7 +17,8 @@ export const unidadesGrupo = [
     nombre: 'ELANVISUAL',
     codigo: 'VIS',
     estado: 'Activo',
-    descripcion: 'Rotulación, impresión digital, UV, DTF UV, CNC, láser, acrílicos, PVC, displays, fachadas, branding y publicidad visual.',
+    descripcion:
+      'Rotulación, impresión digital, UV, DTF UV, CNC, láser, acrílicos, PVC, displays, fachadas, branding y publicidad visual.',
     leads: 36,
     clientes: 24,
     ingresos: 28400,
@@ -28,7 +30,8 @@ export const unidadesGrupo = [
     nombre: 'ELANCENTER',
     codigo: 'CENTER',
     estado: 'Diseño',
-    descripcion: 'Tecnología, diseño gráfico, capacitación, desarrollo y servicios digitales.',
+    descripcion:
+      'Tecnología, diseño gráfico, capacitación, desarrollo, servicios digitales y centro de cómputo creativo.',
     leads: 9,
     clientes: 3,
     ingresos: 0,
@@ -40,7 +43,8 @@ export const unidadesGrupo = [
     nombre: 'ELANHOME',
     codigo: 'HOME',
     estado: 'Planificado',
-    descripcion: 'Decoración, iluminación, energía solar, exteriores, construcción ligera, WPC, grama artificial y soluciones para hogar y negocios.',
+    descripcion:
+      'Decoración, iluminación, energía solar, exteriores, construcción ligera, WPC, grama artificial y soluciones para hogar y negocios.',
     leads: 14,
     clientes: 6,
     ingresos: 0,
@@ -53,43 +57,57 @@ export const kavtoreSalas = [
   {
     id: 'ceo',
     nombre: 'KAVTORÉ CEO',
-    descripcion: 'Estado general de ELANKAV, prioridades, riesgos, utilidad, unidades y decisiones ejecutivas.',
+    descripcion:
+      'Estado general de ELANKAV, prioridades, riesgos, utilidad, unidades y decisiones ejecutivas.',
     estado: 'Base operativa',
   },
   {
     id: 'comercial',
     nombre: 'KAVTORÉ Comercial',
-    descripcion: 'Leads, clientes, cotizaciones, seguimiento, oportunidades y probabilidad de cierre.',
+    descripcion:
+      'Leads, clientes, cotizaciones, seguimiento, oportunidades y probabilidad de cierre.',
     estado: 'Base operativa',
   },
   {
     id: 'visual',
     nombre: 'KAVTORÉ Visual',
-    descripcion: 'Diseño, branding, renders, arquitectura comercial, materiales y presupuesto.',
+    descripcion:
+      'Diseño, branding, renders, arquitectura comercial, materiales, presupuesto y cotización asistida.',
     estado: 'Diseño funcional',
   },
   {
     id: 'produccion',
     nombre: 'KAVTORÉ Producción',
-    descripcion: 'Órdenes de trabajo, materiales, inventario, fabricación, instalación y atrasos.',
+    descripcion:
+      'Órdenes de trabajo, materiales, inventario, fabricación, instalación y atrasos.',
     estado: 'Diseño funcional',
   },
   {
     id: 'proveedores',
     nombre: 'KAVTORÉ Proveedores',
-    descripcion: 'Registro único de proveedor, validación de existencia, precio vigente y tiempo de entrega.',
+    descripcion:
+      'Proveedor, existencia, precio vigente, tiempo de entrega, subcontratación y marketplace futuro.',
     estado: 'Diseño funcional',
   },
   {
     id: 'financiero',
     nombre: 'KAVTORÉ Financiero',
-    descripcion: 'Cobros, pagos, flujo de caja, utilidad, cuentas por cobrar y cuentas por pagar.',
+    descripcion:
+      'Cobros, pagos, flujo de caja, utilidad, cuentas por cobrar y cuentas por pagar.',
     estado: 'Diseño funcional',
   },
   {
     id: 'marketing',
     nombre: 'KAVTORÉ Marketing',
-    descripcion: 'Redes sociales, campañas, segmentación, diseño de contenido, presupuesto y ROI.',
+    descripcion:
+      'Redes sociales, campañas, segmentación, contenido, presupuesto y retorno comercial.',
+    estado: 'Diseño funcional',
+  },
+  {
+    id: 'ai',
+    nombre: 'ELAN AI',
+    descripcion:
+      'Capa superior de inteligencia operativa conectada al CRM CENTRAL. No tiene base de datos propia.',
     estado: 'Diseño funcional',
   },
 ];
@@ -137,8 +155,8 @@ export const operacionesIniciales = [
   },
   {
     id: 'op-005',
-    unidad: 'ELANKAV',
-    tipo: 'Sistema IA',
+    unidad: 'ELAN AI',
+    tipo: 'Automatización',
     cliente: 'Interno',
     estado: 'Diseño',
     origen: 'ELAN KAVTORÉ',
@@ -239,6 +257,7 @@ export const mensajesWhatsApp = [
     unidad: 'ELANVISUAL',
     unidadDetectada: 'ELANVISUAL',
     servicioDetectado: 'Rotulación',
+    tipoCliente: 'Empresa',
     estado: 'Pendiente',
     origen: 'WhatsApp',
   },
@@ -249,6 +268,7 @@ export const mensajesWhatsApp = [
     unidad: 'ELANPET',
     unidadDetectada: 'ELANPET',
     servicioDetectado: 'Pedido catálogo',
+    tipoCliente: 'Afiliado / Veterinaria',
     estado: 'Pendiente',
     origen: 'WhatsApp',
   },
@@ -259,6 +279,7 @@ export const mensajesWhatsApp = [
     unidad: 'ELANHOME',
     unidadDetectada: 'ELANHOME',
     servicioDetectado: 'Energía solar',
+    tipoCliente: 'Empresa',
     estado: 'Nuevo',
     origen: 'WhatsApp',
   },
@@ -267,31 +288,54 @@ export const mensajesWhatsApp = [
 export const tareasIA = [
   {
     id: 'ia-001',
-    tarea: 'Clasificar mensajes entrantes por unidad de negocio, servicio, tipo de cliente y estado del lead.',
+    modulo: 'Comercial',
+    tarea:
+      'Clasificar mensajes entrantes por unidad de negocio, servicio solicitado, tipo de cliente, origen y estado del lead.',
     estado: 'Pendiente',
     prioridad: 'Alta',
   },
   {
     id: 'ia-002',
+    modulo: 'Comercial',
     tarea: 'Detectar clientes repetidos por WhatsApp antes de crear nuevo registro.',
     estado: 'Pendiente',
     prioridad: 'Alta',
   },
   {
     id: 'ia-003',
-    tarea: 'Generar resumen ejecutivo diario desde CRM CENTRAL y Knowledge Core.',
+    modulo: 'Ejecutivo',
+    tarea: 'Generar resumen ejecutivo diario desde CRM CENTRAL y KAVTORÉ.',
     estado: 'Diseño',
     prioridad: 'Alta',
   },
   {
     id: 'ia-004',
-    tarea: 'Validar existencia y precio de productos con proveedores antes de vender.',
+    modulo: 'Proveedores',
+    tarea: 'Validar existencia, precio y tiempo de entrega con proveedores antes de vender.',
     estado: 'Diseño',
     prioridad: 'Alta',
   },
   {
     id: 'ia-005',
-    tarea: 'Crear propuestas visuales preliminares con control de una propuesta gratuita sin revisiones.',
+    modulo: 'Visual',
+    tarea:
+      'Crear propuestas visuales preliminares con control de una propuesta gratuita sin revisiones.',
+    estado: 'Diseño',
+    prioridad: 'Alta',
+  },
+  {
+    id: 'ia-006',
+    modulo: 'Financiero',
+    tarea:
+      'Detectar cuentas por cobrar, flujo de caja bajo, pagos vencidos y utilidad pendiente de confirmar.',
+    estado: 'Diseño',
+    prioridad: 'Alta',
+  },
+  {
+    id: 'ia-007',
+    modulo: 'Producción',
+    tarea:
+      'Detectar órdenes pendientes, faltantes de material, atrasos de fabricación e instalaciones próximas.',
     estado: 'Diseño',
     prioridad: 'Alta',
   },
@@ -319,7 +363,56 @@ export const timelineInicial = [
   {
     id: 'tl-004',
     hora: '12:10',
-    unidad: 'ELAN KAVTORÉ',
-    evento: 'Tarea pendiente: clasificar mensajes entrantes y activar Knowledge Core.',
+    unidad: 'ELAN AI',
+    evento: 'Tarea pendiente: clasificar mensajes entrantes y activar análisis ejecutivo.',
+  },
+];
+
+export const elanAIConfig = {
+  nombre: 'ELAN AI',
+  tipo: 'Capa superior de inteligencia operativa',
+  baseDatosPropia: false,
+  fuentePrincipal: 'CRM CENTRAL',
+  puente: 'CentralBridge',
+  objetivo:
+    'Analizar datos del CRM CENTRAL y convertirlos en decisiones comerciales, financieras, productivas y ejecutivas.',
+  modulos: [
+    'Comercial',
+    'Producción',
+    'Financiero',
+    'Ejecutivo',
+    'Proveedores',
+    'Marketing',
+    'Visual',
+  ],
+  reglas: [
+    'No crear base de datos propia.',
+    'No duplicar CRM CENTRAL.',
+    'No asumir que un WhatsApp pertenece a una sola unidad.',
+    'Clasificar primero unidad, servicio, tipo de cliente, origen y estado.',
+    'Usar ELANHOME para solar; no usar ELANSOLAR como unidad independiente.',
+  ],
+};
+
+export const estructuraElanHome = [
+  {
+    categoria: 'Decoración',
+    items: ['Cuadros', 'Alfombras', 'Decoración interior'],
+  },
+  {
+    categoria: 'Iluminación',
+    items: ['Lámparas', 'Iluminación decorativa', 'Iluminación arquitectónica'],
+  },
+  {
+    categoria: 'Energía solar',
+    items: ['Paneles solares', 'Inversores', 'Baterías', 'Sistemas híbridos', 'Bombeo solar'],
+  },
+  {
+    categoria: 'Exteriores',
+    items: ['Grama artificial', 'Jardines', 'Pérgolas', 'Mobiliario exterior'],
+  },
+  {
+    categoria: 'Construcción ligera',
+    items: ['WPC', 'Fachadas decorativas', 'Revestimientos'],
   },
 ];
