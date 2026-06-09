@@ -53,7 +53,14 @@ function normalizarCRMJson(json = {}) {
     compras: parsearValor(base.compras || base.elankav_compras || []),
     cuentasPorCobrar: parsearValor(base.cuentasPorCobrar || base.elankav_cuentas_por_cobrar || []),
     cuentasPorPagar: parsearValor(base.cuentasPorPagar || base.elankav_cuentas_por_pagar || []),
-    leads: parsearValor(base.leads || base.elankav_leads_whatsapp || []),
+
+    leads: parsearValor(
+      base.leads ||
+        base.leadsWhatsApp ||
+        base.elankav_leads_whatsapp ||
+        []
+    ),
+
     mensajes: parsearValor(base.mensajes || base.elankav_mensajes_whatsapp || []),
     operaciones: parsearValor(base.operaciones || base.elankav_operaciones || []),
     timeline: parsearValor(base.timeline || base.elankav_timeline || []),
