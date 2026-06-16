@@ -1,0 +1,19 @@
+﻿{
+  "name": "ELAN KAVTORÉ OS",
+  "short_name": "KAVTORÉ",
+  "description": "Centro ejecutivo IA privado de ELANKAV",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
