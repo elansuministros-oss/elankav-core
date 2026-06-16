@@ -1,53 +1,49 @@
 ﻿import { useMemo, useState } from 'react';
 import { responderELANAI, analizarCRM } from '../ai/ElanAIEngine';
 
-export default function CentroIA({ datosCore, estadoGlobal, reporteEjecutivo }) {
+export default function CentroIA({ authToken, datosCore, estadoGlobal, reporteEjecutivo }) {
   const [pregunta, setPregunta] = useState('');
-  const [cargandoIA, setCargandoIA] = useState(false);
-  const [respuesta, setRespuesta] = useState(
-    'Hola Erick. Soy ELAN AI conectado a KAVTORÉ. Puedo analizar el CRM CENTRAL y ayudarte a decidir qué atender primero.'
-  );
+  const [respuesta, setRespuesta] = useState('');
+  const [cargando, setCargando] = useState(false);
+  const [aviso, setAviso] = useState('');
 
-  const analisis = useMemo(
-    () => analizarCRM(datosCore, estadoGlobal),
-    [datosCore, estadoGlobal]
-  );
+  const analisis = useMemo(() => analizarCRM(datosCore, estadoGlobal), [datosCore, estadoGlobal]);
 
-  const consultasRapidas = [
-    '¿Qué debo atender hoy?',
-    '¿Cuánto hay por cobrar?',
-    '¿Qué pedidos están pendientes?',
-    '¿Qué empresas están activas?',
-    '¿Cómo está producción?',
-    '¿Cómo está inventario?',
-    '¿Cómo están los proveedores?',
-  ];
+  const pedidos = analisis?.pedidos || [];
+  const empresas = analisis?.empresasActivas || [];
+  const pendienteCobro = Number(analisis?.pendienteCobro || 0);
 
-  const consultar = async (consultaManual) => {
-    const consulta = consultaManual || pregunta;
+  const consultar = async (texto = '') => {
+    const consulta = (texto || pregunta).trim();
 
-    if (!consulta.trim()) {
-      setRespuesta('Escribí una consulta para que KAVTORÉ pueda analizarla.');
+    if (!consulta) {
+      setAviso('Escribí una consulta.');
       return;
     }
 
     setPregunta(consulta);
-    setCargandoIA(true);
-    setRespuesta('Consultando GPT conectado a KAVTORÉ...');
+    setCargando(true);
+    setAviso('');
+    setRespuesta('');
 
     try {
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           pregunta: consulta,
           datos: {
-            datosCore,
             estadoGlobal,
             reporteEjecutivo,
             analisis,
+            resumen: {
+              pedidos: pedidos.length,
+              empresas: empresas.length,
+              pendienteCobro,
+            },
           },
         }),
       });
@@ -55,70 +51,55 @@ export default function CentroIA({ datosCore, estadoGlobal, reporteEjecutivo }) 
       const data = await res.json();
 
       if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'No se pudo consultar OpenAI.');
+        throw new Error(data.error || 'No se pudo consultar KAVTORÉ.');
       }
 
       setRespuesta(data.respuesta || 'KAVTORÉ no devolvió respuesta.');
     } catch (error) {
-      console.error('Error consultando OpenAI:', error);
-      setRespuesta(
-        responderELANAI(consulta, datosCore, estadoGlobal, reporteEjecutivo)
-      );
+      setAviso('OpenAI no respondió. Activé análisis local.');
+      setRespuesta(responderELANAI(consulta, datosCore, estadoGlobal, reporteEjecutivo));
     } finally {
-      setCargandoIA(false);
+      setCargando(false);
     }
   };
 
   return (
-    <section className="ia-panel">
-      <div className="ia-header">
-        <span>ELAN AI · Inteligencia operativa</span>
-        <h2>Centro IA KAVTORÉ</h2>
-        <p>
-          Analiza empresas, pedidos, cobros, producción, inventario y proveedores desde el CRM CENTRAL.
-        </p>
-      </div>
+    <section className="ia-mobile">
+      <section className="ask-card">
+        <span>Centro IA</span>
+        <h1>¿Qué necesitás analizar?</h1>
 
-      <div className="metricas-grid">
-        <div className="metrica-card">
-          <span>Pedidos visibles</span>
-          <strong>{analisis.pedidos.length}</strong>
-        </div>
-
-        <div className="metrica-card">
-          <span>Pendiente por cobrar</span>
-          <strong>C${analisis.pendienteCobro.toLocaleString('es-NI')}</strong>
-        </div>
-
-        <div className="metrica-card">
-          <span>Empresas activas</span>
-          <strong>{analisis.empresasActivas.length}</strong>
-        </div>
-      </div>
-
-      <div className="ia-acciones">
-        {consultasRapidas.map((item) => (
-          <button key={item} type="button" onClick={() => consultar(item)} disabled={cargandoIA}>
-            {item}
-          </button>
-        ))}
-      </div>
-
-      <div className="ia-consulta">
-        <input
+        <textarea
           value={pregunta}
           onChange={(e) => setPregunta(e.target.value)}
-          placeholder="Preguntá algo a KAVTORÉ..."
+          placeholder="Ejemplo: Qué debo atender hoy..."
+          rows={4}
         />
-        <button type="button" onClick={() => consultar()} disabled={cargandoIA}>
-          {cargandoIA ? 'Consultando...' : 'Consultar IA'}
-        </button>
-      </div>
 
-      <div className="ia-respuesta">
-        <strong>Respuesta ejecutiva:</strong>
-        <p>{respuesta}</p>
-      </div>
+        <button type="button" onClick={() => consultar()} disabled={cargando}>
+          {cargando ? 'Analizando...' : 'Analizar'}
+        </button>
+      </section>
+
+      {aviso && <div className="notice-card">{aviso}</div>}
+
+      <section className="answer-card">
+        <span>Respuesta KAVTORÉ</span>
+        <div>{respuesta || 'Esperando consulta.'}</div>
+      </section>
+
+      <section className="quick-grid">
+        <button type="button" onClick={() => consultar('Qué debo atender hoy')} disabled={cargando}>Atender hoy</button>
+        <button type="button" onClick={() => consultar('Qué pedidos están pendientes')} disabled={cargando}>Pedidos</button>
+        <button type="button" onClick={() => consultar('Cuánto hay por cobrar')} disabled={cargando}>Cobros</button>
+        <button type="button" onClick={() => consultar('Qué riesgo ves en la operación')} disabled={cargando}>Riesgos</button>
+      </section>
+
+      <section className="mini-state">
+        <article><span>Pedidos</span><strong>{pedidos.length}</strong></article>
+        <article><span>Cobros</span><strong>C${pendienteCobro.toLocaleString('es-NI')}</strong></article>
+        <article><span>Empresas</span><strong>{empresas.length}</strong></article>
+      </section>
     </section>
   );
 }
