@@ -56,7 +56,8 @@ export default function CentroIA({ authToken, datosCore, estadoGlobal, reporteEj
 
       setRespuesta(data.respuesta || 'KAVTORÉ no devolvió respuesta.');
     } catch (error) {
-      setAviso('OpenAI no respondió. Activé análisis local.');
+      console.error(error);
+      setAviso("OpenAI Error: " + error.message);
       setRespuesta(responderELANAI(consulta, datosCore, estadoGlobal, reporteEjecutivo));
     } finally {
       setCargando(false);
@@ -103,3 +104,4 @@ export default function CentroIA({ authToken, datosCore, estadoGlobal, reporteEj
     </section>
   );
 }
+
