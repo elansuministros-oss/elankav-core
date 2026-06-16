@@ -3,16 +3,27 @@ import CentroIA from './pages/CentroIA';
 import { cargarDatosCRM, calcularEstadoGlobal, construirReporteEjecutivo } from './core/CentralBridge';
 import './App.css';
 
+const MODULOS = [
+  { id: 'ia', titulo: 'Centro IA', detalle: 'Preguntar y decidir' },
+  { id: 'operacion', titulo: 'Operación', detalle: 'Pedidos y cobros' },
+  { id: 'whatsapp', titulo: 'WhatsApp', detalle: 'Leads y seguimiento' },
+  { id: 'reportes', titulo: 'Reportes', detalle: 'Estado ejecutivo' },
+  { id: 'admin', titulo: 'Administrador', detalle: 'Seguridad y sistema' },
+];
+
 export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem('kavtore_token') || '');
   const [usuario, setUsuario] = useState('');
   const [clave, setClave] = useState('');
   const [error, setError] = useState('');
   const [menu, setMenu] = useState(false);
+  const [modulo, setModulo] = useState('ia');
 
   const datosCore = useMemo(() => cargarDatosCRM(), []);
   const estadoGlobal = useMemo(() => calcularEstadoGlobal(datosCore), [datosCore]);
   const reporteEjecutivo = useMemo(() => construirReporteEjecutivo(datosCore), [datosCore]);
+
+  const moduloActivo = MODULOS.find((item) => item.id === modulo) || MODULOS[0];
 
   const ingresar = async (e) => {
     e.preventDefault();
@@ -39,6 +50,13 @@ export default function App() {
   const salir = () => {
     sessionStorage.removeItem('kavtore_token');
     setToken('');
+    setClave('');
+    setMenu(false);
+    setModulo('ia');
+  };
+
+  const abrirModulo = (id) => {
+    setModulo(id);
     setMenu(false);
   };
 
@@ -64,43 +82,37 @@ export default function App() {
   return (
     <main className="kavtore-app">
       <header className="app-topbar">
-        <button className="hamburger-btn" type="button" onClick={() => setMenu(true)}>
+        <button className="hamburger-btn" type="button" onClick={() => setMenu(true)} aria-label="Abrir menú">
           <i></i><i></i><i></i>
         </button>
+
         <div>
           <strong>ELAN KAVTORÉ</strong>
-          <small>Centro IA</small>
+          <small>{moduloActivo.titulo}</small>
         </div>
       </header>
 
       {menu && (
         <section className="menu-layer">
-          <button className="menu-backdrop" type="button" onClick={() => setMenu(false)} />
+          <button className="menu-backdrop" type="button" onClick={() => setMenu(false)} aria-label="Cerrar menú" />
+
           <nav className="menu-panel">
             <div className="menu-head">
               <strong>Menú</strong>
               <small>Administrador</small>
             </div>
 
-            <button className="menu-item activo" type="button" onClick={() => setMenu(false)}>
-              <strong>Centro IA</strong>
-              <span>Preguntar y decidir</span>
-            </button>
-
-            <button className="menu-item" type="button">
-              <strong>Operación</strong>
-              <span>Pedidos y cobros</span>
-            </button>
-
-            <button className="menu-item" type="button">
-              <strong>WhatsApp</strong>
-              <span>Leads y seguimiento</span>
-            </button>
-
-            <button className="menu-item" type="button">
-              <strong>Reportes</strong>
-              <span>Estado ejecutivo</span>
-            </button>
+            {MODULOS.map((item) => (
+              <button
+                key={item.id}
+                className={modulo === item.id ? 'menu-item activo' : 'menu-item'}
+                type="button"
+                onClick={() => abrirModulo(item.id)}
+              >
+                <strong>{item.titulo}</strong>
+                <span>{item.detalle}</span>
+              </button>
+            ))}
 
             <button className="menu-item salir" type="button" onClick={salir}>
               <strong>Cerrar sesión</strong>
@@ -110,12 +122,52 @@ export default function App() {
         </section>
       )}
 
-      <CentroIA
-        authToken={token}
-        datosCore={datosCore}
-        estadoGlobal={estadoGlobal}
-        reporteEjecutivo={reporteEjecutivo}
-      />
+      {modulo === 'ia' && (
+        <CentroIA
+          authToken={token}
+          datosCore={datosCore}
+          estadoGlobal={estadoGlobal}
+          reporteEjecutivo={reporteEjecutivo}
+        />
+      )}
+
+      {modulo === 'admin' && (
+        <section className="module-card admin-module">
+          <span>Administrador</span>
+          <h2>Seguridad del sistema</h2>
+          <p>La contraseña actual se cambia en Vercel por seguridad.</p>
+
+          <div className="admin-grid">
+            <article>
+              <strong>Cambiar contraseña</strong>
+              <p>Editar variable KAVTORE_ADMIN_PASS en Vercel y hacer Redeploy.</p>
+            </article>
+
+            <article>
+              <strong>OpenAI</strong>
+              <p>Conexión lista. Pendiente crédito API.</p>
+            </article>
+
+            <article>
+              <strong>Supabase</strong>
+              <p>Conectado al CRM central.</p>
+            </article>
+
+            <article>
+              <strong>App móvil</strong>
+              <p>PWA activa para Android y iPhone.</p>
+            </article>
+          </div>
+        </section>
+      )}
+
+      {modulo !== 'ia' && modulo !== 'admin' && (
+        <section className="module-card">
+          <span>{moduloActivo.titulo}</span>
+          <h2>{moduloActivo.titulo}</h2>
+          <p>Este módulo está reservado para activación en la siguiente fase.</p>
+        </section>
+      )}
     </main>
   );
 }
