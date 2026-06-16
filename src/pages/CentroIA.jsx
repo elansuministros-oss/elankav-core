@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { responderELANAI, analizarCRM } from '../ai/ElanAIEngine';
 
 export default function CentroIA({ datosCore, estadoGlobal, reporteEjecutivo }) {
   const [pregunta, setPregunta] = useState('');
+  const [cargandoIA, setCargandoIA] = useState(false);
   const [respuesta, setRespuesta] = useState(
     'Hola Erick. Soy ELAN AI conectado a KAVTORÉ. Puedo analizar el CRM CENTRAL y ayudarte a decidir qué atender primero.'
   );
@@ -22,10 +23,50 @@ export default function CentroIA({ datosCore, estadoGlobal, reporteEjecutivo }) 
     '¿Cómo están los proveedores?',
   ];
 
-  const consultar = (consultaManual) => {
+  const consultar = async (consultaManual) => {
     const consulta = consultaManual || pregunta;
+
+    if (!consulta.trim()) {
+      setRespuesta('Escribí una consulta para que KAVTORÉ pueda analizarla.');
+      return;
+    }
+
     setPregunta(consulta);
-    setRespuesta(responderELANAI(consulta, datosCore, estadoGlobal, reporteEjecutivo));
+    setCargandoIA(true);
+    setRespuesta('Consultando GPT conectado a KAVTORÉ...');
+
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pregunta: consulta,
+          datos: {
+            datosCore,
+            estadoGlobal,
+            reporteEjecutivo,
+            analisis,
+          },
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'No se pudo consultar OpenAI.');
+      }
+
+      setRespuesta(data.respuesta || 'KAVTORÉ no devolvió respuesta.');
+    } catch (error) {
+      console.error('Error consultando OpenAI:', error);
+      setRespuesta(
+        responderELANAI(consulta, datosCore, estadoGlobal, reporteEjecutivo)
+      );
+    } finally {
+      setCargandoIA(false);
+    }
   };
 
   return (
@@ -57,7 +98,7 @@ export default function CentroIA({ datosCore, estadoGlobal, reporteEjecutivo }) 
 
       <div className="ia-acciones">
         {consultasRapidas.map((item) => (
-          <button key={item} type="button" onClick={() => consultar(item)}>
+          <button key={item} type="button" onClick={() => consultar(item)} disabled={cargandoIA}>
             {item}
           </button>
         ))}
@@ -69,8 +110,8 @@ export default function CentroIA({ datosCore, estadoGlobal, reporteEjecutivo }) 
           onChange={(e) => setPregunta(e.target.value)}
           placeholder="Preguntá algo a KAVTORÉ..."
         />
-        <button type="button" onClick={() => consultar()}>
-          Consultar IA
+        <button type="button" onClick={() => consultar()} disabled={cargandoIA}>
+          {cargandoIA ? 'Consultando...' : 'Consultar IA'}
         </button>
       </div>
 
