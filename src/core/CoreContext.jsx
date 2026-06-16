@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+﻿import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import {
   clientesIniciales,
@@ -83,10 +83,10 @@ export function CoreProvider({ children }) {
 
     async function cargarCRMExterno() {
       try {
-        const respuesta = await fetch('/crm-central.json', { cache: 'no-store' });
+        const respuesta = await fetch('/api/crm-live', { cache: 'no-store' });
 
         if (!respuesta.ok) {
-          throw new Error('crm-central.json no disponible');
+          throw new Error('api crm-live no disponible');
         }
 
         const json = await respuesta.json();
@@ -94,16 +94,16 @@ export function CoreProvider({ children }) {
 
         if (activo && tieneDatosCRM(normalizado)) {
           setCrmExterno(normalizado);
-          setFuenteExterna('CRM CENTRAL JSON');
+          setFuenteExterna('SUPABASE LIVE');
           return;
         }
 
         if (activo) {
           setCrmExterno(null);
-          setFuenteExterna('CRM JSON VACIO');
+          setFuenteExterna('SUPABASE VACIO');
         }
       } catch (error) {
-        console.warn('No se pudo cargar /crm-central.json. Se usará localStorage o demo.', error);
+        console.warn('No se pudo cargar /crm-central.json. Se usarÃ¡ localStorage o demo.', error);
 
         if (activo) {
           setCrmExterno(null);
