@@ -1,4 +1,5 @@
-﻿import OpenAI from "openai";
+﻿```js
+import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 
 const client = new OpenAI({
@@ -7,7 +8,10 @@ const client = new OpenAI({
 
 const supabase =
   process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    ? createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      )
     : null;
 
 const allowedOrigins = [
@@ -18,13 +22,17 @@ const allowedOrigins = [
 
 function setCors(req, res) {
   const origin = req.headers.origin || "";
+
   const allowOrigin = allowedOrigins.includes(origin)
     ? origin
     : "https://visual.elankav.com";
 
   res.setHeader("Access-Control-Allow-Origin", allowOrigin);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
 }
 
 function normalizarMensajes(body = {}) {
@@ -38,7 +46,12 @@ function normalizarMensajes(body = {}) {
   }
 
   if (body.mensaje) {
-    return [{ role: "user", content: String(body.mensaje) }];
+    return [
+      {
+        role: "user",
+        content: String(body.mensaje)
+      }
+    ];
   }
 
   return [];
@@ -46,7 +59,10 @@ function normalizarMensajes(body = {}) {
 
 function ultimoTextoUsuario(mensajes = []) {
   const ultimos = [...mensajes].reverse();
-  return String(ultimos.find((m) => m.role === "user")?.content || "").trim();
+
+  return String(
+    ultimos.find((m) => m.role === "user")?.content || ""
+  ).trim();
 }
 
 function limpiarBusqueda(valor = "") {
@@ -61,6 +77,7 @@ async function buscarClientes(texto = "", usuario = {}) {
   if (!supabase) return [];
 
   const q = limpiarBusqueda(texto);
+
   if (!q || q.length < 2) return [];
 
   const like = `%${q}%`;
@@ -68,7 +85,21 @@ async function buscarClientes(texto = "", usuario = {}) {
   let query = supabase
     .from("clientes")
     .select(
-      "id, cliente, empresa, nombre, contacto, whatsapp, telefono, correo, email, ruc, ciudad, vendedor_id, vendedor_nombre"
+      `
+      id,
+      cliente,
+      empresa,
+      nombre,
+      contacto,
+      whatsapp,
+      telefono,
+      correo,
+      email,
+      ruc,
+      ciudad,
+      vendedor_id,
+      vendedor_nombre
+    `
     )
     .or(
       [
@@ -87,7 +118,9 @@ async function buscarClientes(texto = "", usuario = {}) {
     .limit(8);
 
   if (usuario?.rol === "ventas" && usuario?.id) {
-    query = query.or(`vendedor_id.eq.${usuario.id},vendedor_id.is.null`);
+    query = query.or(
+      `vendedor_id.eq.${usuario.id},vendedor_id.is.null`
+    );
   }
 
   const { data, error } = await query;
@@ -101,17 +134,23 @@ async function buscarClientes(texto = "", usuario = {}) {
 }
 
 function contextoClientes(clientes = []) {
-  if (!clientes.length) return "Clientes encontrados en CRM: ninguno.";
+  if (!clientes.length) {
+    return "Clientes CRM encontrados: ninguno.";
+  }
 
   return [
-    "Clientes encontrados en CRM ELANVISUAL:",
+    "Clientes CRM encontrados:",
     ...clientes.map((c, i) => {
-      const nombre = c.empresa || c.cliente || c.nombre || c.contacto || "Sin nombre";
-      const contacto = c.contacto || c.nombre || "";
-      const telefono = c.whatsapp || c.telefono || "";
-      const correo = c.correo || c.email || "";
-      const ciudad = c.ciudad || "";
-      return `${i + 1}. ID: ${c.id} | Cliente: ${nombre} | Contacto: ${contacto} | Tel: ${telefono} | Correo: ${correo} | Ciudad: ${ciudad} | Vendedor: ${c.vendedor_nombre || c.vendedor_id || "Sin asignar"}`;
+      const nombre =
+        c.empresa ||
+        c.cliente ||
+        c.nombre ||
+        c.contacto ||
+        "Sin nombre";
+
+      return `${i + 1}. ${nombre} | ${
+        c.whatsapp || c.telefono || ""
+      } | ${c.ciudad || ""}`;
     })
   ].join("\n");
 }
@@ -132,11 +171,13 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body || {};
+
     const unidad = body.unidad || "ELANKAV";
     const contexto = body.contexto || "";
     const proyecto = body.proyecto || null;
     const usuario = body.usuario || null;
     const modo = body.modo || "chat";
+
     const mensajes = normalizarMensajes(body);
 
     if (!mensajes.length) {
@@ -147,30 +188,96 @@ export default async function handler(req, res) {
     }
 
     const textoUsuario = ultimoTextoUsuario(mensajes);
-    const clientes = unidad === "ELANVISUAL" ? await buscarClientes(textoUsuario, usuario) : [];
+
+    const clientes =
+      unidad === "ELANVISUAL"
+        ? await buscarClientes(textoUsuario, usuario)
+        : [];
 
     const system = [
-      "Eres ELANKAV CORE AI, asistente central para ELANVISUAL, ELANPET, ELANCENTER, ELANHOME y ELAN AI.",
-      "Ayudas a crear propuestas, análisis técnicos, recomendaciones, respuestas rápidas y organización operativa.",
-      "No inventes precios. Si falta precio, indica solicitud de costo. No modifiques precios oficiales.",
-      "No menciones materiales, tecnologías, proveedores o acabados que no estén explícitamente en el mensaje, contexto, proyecto o base técnica entregada.",
-      "Si el material no está confirmado, pregunta por el material sin sugerir nombres externos.",
-      "Para ELANVISUAL, no uses ejemplos genéricos como mesh, frontlit, backlit, canvas u otros si no vienen en la base técnica.",
-      "Cuando falten datos, pregunta solo lo necesario: medida, cantidad, impresión, instalación, ciudad y fecha requerida.",
-      "Si se encuentran clientes CRM, preséntalos primero y pregunta cuál desea usar antes de cotizar.",
-      "No inventes clientes. Si no aparece en CRM, indica que no encontraste coincidencia y pregunta si desea registrarlo.",
+      "Eres ELANKAV CORE AI.",
+
+      "Para ELANVISUAL trabajas como asesor comercial senior.",
+
+      "Tu prioridad es responder, resolver y cotizar, no entrevistar.",
+
+      "Extrae automáticamente toda la información posible del mensaje del usuario.",
+
+      "No hagas preguntas sobre información que ya fue proporcionada.",
+
+      "Máximo una pregunta por respuesta.",
+
+      "Si identificas producto, medidas y ciudad debes avanzar inmediatamente hacia una cotización preliminar.",
+
+      "Si el usuario pide cotización, presupuesto o precio, activa automáticamente MODO COTIZADOR.",
+
+      "Primero cotiza. Después completa detalles si son necesarios.",
+
+      "No bloquees una cotización por falta de CRM.",
+
+      "No obligues a registrar clientes para cotizar.",
+
+      "Si existe coincidencia CRM puedes mencionarla, pero no detengas la cotización.",
+
+      "No preguntes si desea PDF antes de generar la cotización.",
+
+      "No preguntes por IVA salvo que sea necesario.",
+
+      "No preguntes por instalación si el usuario escribió instalado.",
+
+      "No preguntes por impresión si el usuario escribió full color.",
+
+      "No preguntes por laminado si el usuario escribió sobre laminado.",
+
+      "Solo pregunta cuando falten datos imposibles de deducir.",
+
+      "Interpreta automáticamente:",
+
+      "'full color' = impresión full color.",
+
+      "'vinil adhesivo impreso' = impresión incluida.",
+
+      "'sobre laminado' = laminado incluido.",
+
+      "'instalado' = instalación incluida.",
+
+      "'sin instalación' = instalación no incluida.",
+
+      "'fachada existente' = estructura existente.",
+
+      "Utiliza información del CRM, proyecto y contexto cuando exista.",
+
+      "Si no existe un precio oficial disponible, genera una propuesta preliminar estructurada sin inventar costos.",
+
+      "Responde de forma breve, comercial, directa y útil para vendedores.",
+
       `Unidad: ${unidad}`,
       `Modo: ${modo}`,
-      proyecto ? `Proyecto: ${JSON.stringify(proyecto)}` : "",
-      usuario ? `Usuario: ${JSON.stringify(usuario)}` : "",
-      contexto ? `Contexto: ${contexto}` : "",
+
+      proyecto
+        ? `Proyecto:\n${JSON.stringify(proyecto)}`
+        : "",
+
+      usuario
+        ? `Usuario:\n${JSON.stringify(usuario)}`
+        : "",
+
+      contexto
+        ? `Contexto:\n${contexto}`
+        : "",
+
       contextoClientes(clientes)
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const response = await client.responses.create({
-      model: "gpt-4.1-mini",
+      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
       input: [
-        { role: "system", content: system },
+        {
+          role: "system",
+          content: system
+        },
         ...mensajes
       ]
     });
@@ -182,9 +289,13 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error("Error ELANKAV CORE AI:", error);
+
     return res.status(500).json({
       ok: false,
-      error: error?.message || "Error conectando ELANKAV CORE AI"
+      error:
+        error?.message ||
+        "Error conectando ELANKAV CORE AI"
     });
   }
 }
+```
