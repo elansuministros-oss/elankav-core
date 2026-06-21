@@ -85,7 +85,7 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
     cotizacionesInteligentes,
     pedidos,
   ] = await Promise.all([
-    leerTablaSegura("materiales_master", 40),
+    leerTablaSegura("materiales_ia_v2", 40),
     leerTablaSegura("tintas_master", 30),
     leerTablaSegura("biblioteca_tecnica", 30),
     leerTablaSegura("biblioteca_componentes", 40),
@@ -101,7 +101,7 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
     entrada_usuario: entradaUsuario,
     estado_fuentes: {
       supabase: "conectado",
-      materiales_master: materialesMaster.error ? "error" : "ok",
+     materiales_ia_v2: materialesMaster.error ? "error" : "ok",
       tintas_master: tintasMaster.error ? "error" : "ok",
       biblioteca_tecnica: bibliotecaTecnica.error ? "error" : "ok",
       biblioteca_componentes: bibliotecaComponentes.error ? "error" : "ok",
@@ -111,7 +111,7 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
       pedidos: pedidos.error ? "error" : "ok",
     },
     fuentes: {
-      materiales_master: materialesMaster.data,
+      materiales_ia_v2: materialesMaster.data,
       tintas_master: tintasMaster.data,
       biblioteca_tecnica: bibliotecaTecnica.data,
       biblioteca_componentes: bibliotecaComponentes.data,
@@ -144,7 +144,7 @@ function construirContextoMemoriaOperativa(memoriaOperativa = null) {
     proyecto: memoriaOperativa.proyecto || null,
     entrada_usuario: memoriaOperativa.entrada_usuario || "",
     estado_fuentes: estadoFuentes,
-    materiales_master: Array.isArray(fuentes.materiales_master) ? fuentes.materiales_master.slice(0, 8) : [],
+    materiales_ia_v2: Array.isArray(fuentes.materiales_ia_v2) ? fuentes.materiales_ia_v2.slice(0, 12) : [],
     tintas_master: Array.isArray(fuentes.tintas_master) ? fuentes.tintas_master.slice(0, 5) : [],
     biblioteca_tecnica: Array.isArray(fuentes.biblioteca_tecnica) ? fuentes.biblioteca_tecnica.slice(0, 5) : [],
     biblioteca_componentes: Array.isArray(fuentes.biblioteca_componentes) ? fuentes.biblioteca_componentes.slice(0, 8) : [],
