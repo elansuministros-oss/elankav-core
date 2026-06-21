@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState } from 'react';
 import CentroIA from './pages/CentroIA';
+import TestSupabase from './pages/TestSupabase';
 import { cargarDatosCRM, calcularEstadoGlobal, construirReporteEjecutivo } from './core/CentralBridge';
 import './App.css';
 
@@ -137,7 +138,7 @@ export default function App() {
           <h2>Seguridad del sistema</h2>
           <p>La contraseña actual se cambia en Vercel por seguridad.</p>
 
-          <div className="admin-grid">
+          <TestSupabase />`n`n          <div className="admin-grid">
             <article>
               <strong>Cambiar contraseña</strong>
               <p>Editar variable KAVTORE_ADMIN_PASS en Vercel y hacer Redeploy.</p>
@@ -171,3 +172,4 @@ export default function App() {
     </main>
   );
 }
+
