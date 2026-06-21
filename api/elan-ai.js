@@ -1,10 +1,5 @@
-﻿```js
-import OpenAI from "openai";
+﻿import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
 
 const supabase =
   process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -14,8 +9,7 @@ const supabase =
       )
     : null;
 
-
-    const allowedOrigins = [
+const allowedOrigins = [
   "https://visual.elankav.com",
   "https://elanvisual-platform.vercel.app",
   "https://elankav-core.vercel.app",
@@ -164,7 +158,19 @@ export default async function handler(req, res) {
   setCors(req, res);
 
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return res.status(200).json({
+      ok: true,
+      message: "CORS OK"
+    });
+  }
+
+  if (req.method === "GET") {
+    return res.status(200).json({
+      ok: true,
+      service: "ELANKAV CORE AI",
+      endpoint: "/api/elan-ai",
+      status: "online"
+    });
   }
 
   if (req.method !== "POST") {
@@ -175,6 +181,17 @@ export default async function handler(req, res) {
   }
 
   try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        ok: false,
+        error: "OPENAI_API_KEY no configurada"
+      });
+    }
+
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+
     const body = req.body || {};
 
     const unidad = body.unidad || "ELANKAV";
@@ -201,76 +218,38 @@ export default async function handler(req, res) {
 
     const system = [
       "Eres ELANKAV CORE AI.",
-
       "Para ELANVISUAL trabajas como asesor comercial senior.",
-
       "Tu prioridad es responder, resolver y cotizar, no entrevistar.",
-
       "Extrae automáticamente toda la información posible del mensaje del usuario.",
-
       "No hagas preguntas sobre información que ya fue proporcionada.",
-
       "Máximo una pregunta por respuesta.",
-
       "Si identificas producto, medidas y ciudad debes avanzar inmediatamente hacia una cotización preliminar.",
-
       "Si el usuario pide cotización, presupuesto o precio, activa automáticamente MODO COTIZADOR.",
-
       "Primero cotiza. Después completa detalles si son necesarios.",
-
       "No bloquees una cotización por falta de CRM.",
-
       "No obligues a registrar clientes para cotizar.",
-
       "Si existe coincidencia CRM puedes mencionarla, pero no detengas la cotización.",
-
       "No preguntes si desea PDF antes de generar la cotización.",
-
       "No preguntes por IVA salvo que sea necesario.",
-
       "No preguntes por instalación si el usuario escribió instalado.",
-
       "No preguntes por impresión si el usuario escribió full color.",
-
       "No preguntes por laminado si el usuario escribió sobre laminado.",
-
       "Solo pregunta cuando falten datos imposibles de deducir.",
-
       "Interpreta automáticamente:",
-
       "'full color' = impresión full color.",
-
       "'vinil adhesivo impreso' = impresión incluida.",
-
       "'sobre laminado' = laminado incluido.",
-
       "'instalado' = instalación incluida.",
-
       "'sin instalación' = instalación no incluida.",
-
       "'fachada existente' = estructura existente.",
-
       "Utiliza información del CRM, proyecto y contexto cuando exista.",
-
       "Si no existe un precio oficial disponible, genera una propuesta preliminar estructurada sin inventar costos.",
-
       "Responde de forma breve, comercial, directa y útil para vendedores.",
-
       `Unidad: ${unidad}`,
       `Modo: ${modo}`,
-
-      proyecto
-        ? `Proyecto:\n${JSON.stringify(proyecto)}`
-        : "",
-
-      usuario
-        ? `Usuario:\n${JSON.stringify(usuario)}`
-        : "",
-
-      contexto
-        ? `Contexto:\n${contexto}`
-        : "",
-
+      proyecto ? `Proyecto:\n${JSON.stringify(proyecto)}` : "",
+      usuario ? `Usuario:\n${JSON.stringify(usuario)}` : "",
+      contexto ? `Contexto:\n${contexto}` : "",
       contextoClientes(clientes)
     ]
       .filter(Boolean)
@@ -297,10 +276,7 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       ok: false,
-      error:
-        error?.message ||
-        "Error conectando ELANKAV CORE AI"
+      error: error?.message || "Error conectando ELANKAV CORE AI"
     });
   }
 }
-```
