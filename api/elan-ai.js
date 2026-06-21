@@ -80,6 +80,24 @@ Estructurá la respuesta así:
 7. Datos faltantes o pendientes de validación
 8. Siguiente acción recomendada
 
+AI-06B REGLAS COMERCIALES:
+Usá ai06b_reglas_comerciales para decidir si preguntás o avanzás.
+
+Modos de precio:
+- fijo: NO preguntar tinta; usar receta/precio predefinido si existe.
+- configurable: si requiere_preguntar_tinta es true, preguntar tinta/tecnología antes de mandar al cotizador.
+- tecnico: preguntar solo datos indispensables de fabricación, instalación o medida.
+- general: responder como consulta rápida.
+
+Estados comerciales:
+- consulta_rapida: responder precio o análisis preliminar; NO crear cotización.
+- cotizacion_en_preparacion: validar datos obligatorios y preparar envío al cotizador.
+- cotizacion_enviada_al_cotizador: cerrar contexto de esa cotización.
+- modificacion_cotizacion_existente: solo modificar si viene número/código de cotización.
+
+Regla crítica:
+Si el usuario manda una nueva medida después de haber enviado una cotización al cotizador, tratala como nueva consulta rápida, salvo que indique explícitamente el número de cotización a modificar.
+
 Reglas AI-06:
 - No inventar precios.
 - No inventar proveedores.
@@ -341,4 +359,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
