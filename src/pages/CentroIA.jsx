@@ -27,14 +27,16 @@ export default function CentroIA({ authToken, datosCore, estadoGlobal, reporteEj
     setRespuesta('');
 
     try {
-      const res = await fetch('/api/ai', {
+      const res = await fetch('/api/elan-ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          pregunta: consulta,
+          mensaje: consulta,
+          unidad: 'ELANVISUAL',
+          modo: 'centro_ia',
           datos: {
             estadoGlobal,
             reporteEjecutivo,
@@ -104,4 +106,5 @@ export default function CentroIA({ authToken, datosCore, estadoGlobal, reporteEj
     </section>
   );
 }
+
 
