@@ -1,4 +1,4 @@
-import {
+﻿import {
   clientesIniciales,
   empresasIniciales,
   leadsIniciales,
@@ -130,10 +130,10 @@ export function cargarDatosCRM() {
 
   const operacionesDesdeCRM = [
     ...operacionesIniciales,
-    ...cotizaciones.map((item) => ({ ...item, tipo: item.tipo || 'Cotización' })),
+    ...cotizaciones.map((item) => ({ ...item, tipo: item.tipo || 'CotizaciÃ³n' })),
     ...pedidos.map((item) => ({ ...item, tipo: item.tipo || 'Pedido' })),
     ...ordenesTrabajo.map((item) => ({ ...item, tipo: item.tipo || 'Orden de Trabajo' })),
-    ...produccion.map((item) => ({ ...item, tipo: item.tipo || 'Producción' })),
+    ...produccion.map((item) => ({ ...item, tipo: item.tipo || 'ProducciÃ³n' })),
     ...cobros.map((item) => ({ ...item, tipo: item.tipo || 'Cobro' })),
   ];
 
@@ -163,7 +163,7 @@ export function cargarDatosCRM() {
     timeline: timelineInicial,
     metadata: {
       modo: 'LAB',
-      version: 'CentralBridge Kavtoré v0.1',
+      version: 'CentralBridge KavtorÃ© v0.1',
       fuenteActual: 'LocalStorage + datos demo',
       fuenteFutura: 'Supabase / CRM Central',
       listoParaIntegracion: true,
@@ -217,7 +217,7 @@ export function calcularEstadoGlobal(datosCore = {}) {
     inventarioCritico,
     listoParaIntegracion: datosCore.metadata?.listoParaIntegracion ?? true,
     modo: datosCore.metadata?.modo || 'LAB',
-    version: datosCore.metadata?.version || 'CentralBridge Kavtoré v0.1',
+    version: datosCore.metadata?.version || 'CentralBridge KavtorÃ© v0.1',
     fuenteActual: datosCore.metadata?.fuenteActual || 'LocalStorage + datos demo',
     fuenteFutura: datosCore.metadata?.fuenteFutura || 'Supabase / CRM Central',
   };
@@ -249,7 +249,7 @@ export function construirReporteEjecutivo(datosCore = {}) {
   if (estado.mensajesPendientes > 0) {
     alertas.push({
       titulo: 'Mensajes pendientes',
-      detalle: `${estado.mensajesPendientes} conversaciones requieren clasificación o seguimiento.`,
+      detalle: `${estado.mensajesPendientes} conversaciones requieren clasificaciÃ³n o seguimiento.`,
       nivel: 'Media',
     });
   }
@@ -257,36 +257,36 @@ export function construirReporteEjecutivo(datosCore = {}) {
   if (estado.cotizacionesPendientes > 0) {
     alertas.push({
       titulo: 'Cotizaciones pendientes',
-      detalle: `${estado.cotizacionesPendientes} cotizaciones necesitan revisión comercial.`,
+      detalle: `${estado.cotizacionesPendientes} cotizaciones necesitan revisiÃ³n comercial.`,
       nivel: 'Alta',
     });
   }
 
   if (estado.inventarioCritico > 0) {
     alertas.push({
-      titulo: 'Inventario crítico',
-      detalle: `${estado.inventarioCritico} materiales están en nivel crítico.`,
+      titulo: 'Inventario crÃ­tico',
+      detalle: `${estado.inventarioCritico} materiales estÃ¡n en nivel crÃ­tico.`,
       nivel: 'Alta',
     });
   }
 
   const recomendaciones = [
-    'Validar conexión CRM → CORE con datos reales.',
+    'Validar conexiÃ³n CRM â†’ CORE con datos reales.',
     'Activar Knowledge Core para memorias especializadas.',
-    'Convertir ELAN AI Center en ELAN KAVTORÉ OS.',
+    'Convertir ELAN AI Center en ELAN KAVTORÃ‰ OS.',
   ];
 
   return {
     estado,
     alertas,
     recomendaciones,
-    accionPrincipal: alertas[0]?.titulo || 'Continuar construcción de ELAN KAVTORÉ OS',
-    resumen: 'ELANKAV CORE está listo para evolucionar de dashboard ejecutivo a sistema operativo inteligente.',
+    accionPrincipal: alertas[0]?.titulo || 'Continuar construcciÃ³n de ELAN KAVTORÃ‰ OS',
+    resumen: 'ELANKAV CORE estÃ¡ listo para evolucionar de dashboard ejecutivo a sistema operativo inteligente.',
   };
 }
 
 export function registrarOperacionCentral(data) {
-  console.log('Operación recibida:', data);
+  console.log('OperaciÃ³n recibida:', data);
 
   return {
     success: true,
@@ -294,3 +294,4 @@ export function registrarOperacionCentral(data) {
     timestamp: new Date().toISOString(),
   };
 }
+
