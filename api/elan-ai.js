@@ -140,14 +140,14 @@ function construirContextoMemoriaOperativa(memoriaOperativa = null) {
     proyecto: memoriaOperativa.proyecto || null,
     entrada_usuario: memoriaOperativa.entrada_usuario || "",
     estado_fuentes: estadoFuentes,
-    materiales_master: Array.isArray(fuentes.materiales_master) ? fuentes.materiales_master.slice(0, 30) : [],
-    tintas_master: Array.isArray(fuentes.tintas_master) ? fuentes.tintas_master.slice(0, 20) : [],
-    biblioteca_tecnica: Array.isArray(fuentes.biblioteca_tecnica) ? fuentes.biblioteca_tecnica.slice(0, 20) : [],
-    biblioteca_componentes: Array.isArray(fuentes.biblioteca_componentes) ? fuentes.biblioteca_componentes.slice(0, 30) : [],
-    tecnologias_impresion: Array.isArray(fuentes.tecnologias_impresion) ? fuentes.tecnologias_impresion.slice(0, 20) : [],
-    proveedores: Array.isArray(fuentes.proveedores) ? fuentes.proveedores.slice(0, 20) : [],
-    cotizaciones_inteligentes: Array.isArray(fuentes.cotizaciones_inteligentes) ? fuentes.cotizaciones_inteligentes.slice(0, 10) : [],
-    pedidos: Array.isArray(fuentes.pedidos) ? fuentes.pedidos.slice(0, 10) : [],
+    materiales_master: Array.isArray(fuentes.materiales_master) ? fuentes.materiales_master.slice(0, 8) : [],
+    tintas_master: Array.isArray(fuentes.tintas_master) ? fuentes.tintas_master.slice(0, 5) : [],
+    biblioteca_tecnica: Array.isArray(fuentes.biblioteca_tecnica) ? fuentes.biblioteca_tecnica.slice(0, 5) : [],
+    biblioteca_componentes: Array.isArray(fuentes.biblioteca_componentes) ? fuentes.biblioteca_componentes.slice(0, 8) : [],
+    tecnologias_impresion: Array.isArray(fuentes.tecnologias_impresion) ? fuentes.tecnologias_impresion.slice(0, 6) : [],
+    proveedores: Array.isArray(fuentes.proveedores) ? fuentes.proveedores.slice(0, 5) : [],
+    cotizaciones_inteligentes: Array.isArray(fuentes.cotizaciones_inteligentes) ? fuentes.cotizaciones_inteligentes.slice(0, 3) : [],
+    pedidos: Array.isArray(fuentes.pedidos) ? fuentes.pedidos.slice(0, 3) : [],
     produccion_preliminar: produccion,
     reglas: memoriaOperativa.reglas || [],
   };
@@ -455,6 +455,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
 
