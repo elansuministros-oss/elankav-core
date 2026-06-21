@@ -448,7 +448,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       respuesta: response.output_text || "",
-      clientes
+      clientes,
+      debug_estado_fuentes: memoriaOperativa?.estado_fuentes || null
     });
   } catch (error) {
     console.error("Error ELANKAV CORE AI:", error);
@@ -459,6 +460,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
 
