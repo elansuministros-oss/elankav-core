@@ -133,8 +133,7 @@ function normalizarMensajes(body = {}) {
 }
 
 function ultimoTextoUsuario(mensajes = []) {
-  const ultimos = [{ role: 'developer', content: construirContextoMemoriaOperativa(memoriaOperativa) },
-        ...mensajes].reverse();
+  const ultimos = [...mensajes].reverse();
 
   return String(
     ultimos.find((m) => m.role === "user")?.content || ""
@@ -359,5 +358,6 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
