@@ -42,15 +42,9 @@ async function leerTablaSegura(nombre, limite = 25) {
   const { data, error } = await supabase
     .from(nombre)
     .select(
-      nombre === "materiales_master" ? "id,nombre,categoria,unidad,costo,precio,estado" :
-      nombre === "tintas_master" ? "id,nombre,tipo,costo,precio,estado" :
-      nombre === "biblioteca_tecnica" ? "id,nombre,categoria,descripcion,estado" :
-      nombre === "biblioteca_componentes" ? "id,nombre,categoria,unidad,cantidad,estado" :
-      nombre === "tecnologias_impresion" ? "id,nombre,tipo,estado" :
-      nombre === "proveedores" ? "id,nombre,alias,ciudad,estado" :
-      nombre === "cotizaciones_inteligentes" ? "id,codigo,cliente,total,estado,created_at" :
-      nombre === "pedidos" ? "id,codigo,cliente,total,estado,created_at" :
-      "id,nombre,estado"
+      nombre === "cotizaciones_inteligentes" || nombre === "pedidos"
+        ? "id,estado,created_at"
+        : "id,nombre,estado"
     )
     .limit(limite);
 
@@ -465,6 +459,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
 
