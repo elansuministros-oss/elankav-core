@@ -14,10 +14,13 @@ const supabase =
       )
     : null;
 
-const allowedOrigins = [
+
+    const allowedOrigins = [
   "https://visual.elankav.com",
   "https://elanvisual-platform.vercel.app",
-  "http://localhost:5173"
+  "https://elankav-core.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:5174"
 ];
 
 function setCors(req, res) {
@@ -28,11 +31,13 @@ function setCors(req, res) {
     : "https://visual.elankav.com";
 
   res.setHeader("Access-Control-Allow-Origin", allowOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
+    "Content-Type, Authorization, X-Requested-With"
   );
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Vary", "Origin");
 }
 
 function normalizarMensajes(body = {}) {
