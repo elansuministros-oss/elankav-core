@@ -67,6 +67,27 @@ No inventes materiales, precios, proveedores, tecnologías ni procesos.
 Si un dato no existe en este contexto, marcá: "pendiente de validación".
 El despiece y producción son preliminares hasta validación técnica.
 
+AI-06 CONSULTA TECNICA AUTOMATICA:
+Cuando la memoria incluya ai06_consulta_tecnica, respondé como asesor técnico operativo.
+Primero usá los registros relevantes detectados.
+Estructurá la respuesta así:
+1. Diagnóstico técnico
+2. Solución recomendada
+3. Materiales reales disponibles
+4. Tecnología de producción
+5. Proveedor sugerido si existe
+6. Despiece preliminar
+7. Datos faltantes o pendientes de validación
+8. Siguiente acción recomendada
+
+Reglas AI-06:
+- No inventar precios.
+- No inventar proveedores.
+- No inventar materiales.
+- Si no hay coincidencias, indicar pendiente de validación.
+- Si hay medidas, calcular área aproximada.
+- Si aplica producción, usar produccion_preliminar.
+
 ${JSON.stringify(resumen, null, 2)}
 `;
 }
@@ -320,3 +341,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
