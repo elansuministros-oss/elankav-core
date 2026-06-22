@@ -87,11 +87,12 @@ async function leerTablaSegura(nombre, limite = 25) {
 async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad = "ELANVISUAL" } = {}) {
   if (!supabase) {
     return {
-      version: "AI-07",
+      version: "AI-07-RPC",
       unidad,
       entrada_usuario: entradaUsuario,
       estado_fuentes: {
         supabase: "no_configurado",
+        rpc: "no_configurado",
       },
       fuentes: {},
       reglas: [
@@ -103,60 +104,51 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
     };
   }
 
-  const [
-    materialesMaster,
-    tintasMaster,
-    bibliotecaTecnica,
-    bibliotecaComponentes,
-    tecnologiasImpresion,
-    proveedores,
-    cotizacionesInteligentes,
-    pedidos,
-  ] = await Promise.all([
-    leerTablaSegura("materiales_ia_v2", 40),
-    leerTablaSegura("tintas_master", 30),
-    leerTablaSegura("biblioteca_tecnica", 30),
-    leerTablaSegura("biblioteca_componentes", 40),
-    leerTablaSegura("tecnologias_impresion", 30),
-    leerTablaSegura("proveedores", 30),
-    leerTablaSegura("cotizaciones_inteligentes", 15),
-    leerTablaSegura("pedidos", 15),
-  ]);
+  const { data, error } = await supabase.rpc("elan_ai_memoria");
+
+  if (error) {
+    console.error("AI-07 RPC error:", error);
+
+    return {
+      version: "AI-07-RPC",
+      unidad,
+      entrada_usuario: entradaUsuario,
+      estado_fuentes: {
+        supabase: "conectado",
+        rpc: error.message || "error_rpc",
+      },
+      fuentes: {},
+      reglas: [
+        "No inventar precios.",
+        "No inventar materiales.",
+        "No inventar proveedores.",
+        "Si no hay dato registrado, indicar pendiente de validacion.",
+      ],
+    };
+  }
 
   return {
-    version: "AI-07",
+    version: "AI-07-RPC",
     unidad,
     entrada_usuario: entradaUsuario,
     estado_fuentes: {
       supabase: "conectado",
-     materiales_ia_v2: materialesMaster.error || "ok",
-tintas_master: tintasMaster.error || "ok",
-biblioteca_tecnica: bibliotecaTecnica.error || "ok",
-biblioteca_componentes: bibliotecaComponentes.error || "ok",
-tecnologias_impresion: tecnologiasImpresion.error || "ok",
-proveedores: proveedores.error || "ok",
-cotizaciones_inteligentes: cotizacionesInteligentes.error || "ok",
-pedidos: pedidos.error || "ok",
-      tintas_master: tintasMaster.error ? "error" : "ok",
-      biblioteca_tecnica: bibliotecaTecnica.error ? "error" : "ok",
-      biblioteca_componentes: bibliotecaComponentes.error ? "error" : "ok",
-      tecnologias_impresion: tecnologiasImpresion.error ? "error" : "ok",
-      proveedores: proveedores.error ? "error" : "ok",
-      cotizaciones_inteligentes: cotizacionesInteligentes.error ? "error" : "ok",
-      pedidos: pedidos.error ? "error" : "ok",
+      rpc: "ok",
+      materiales_ia_v2: Array.isArray(data?.materiales_ia_v2) ? "ok" : "sin_datos",
+      pedidos: Array.isArray(data?.pedidos) ? "ok" : "sin_datos",
     },
     fuentes: {
-      materiales_ia_v2: materialesMaster.data,
-      tintas_master: tintasMaster.data,
-      biblioteca_tecnica: bibliotecaTecnica.data,
-      biblioteca_componentes: bibliotecaComponentes.data,
-      tecnologias_impresion: tecnologiasImpresion.data,
-      proveedores: proveedores.data,
-      cotizaciones_inteligentes: cotizacionesInteligentes.data,
-      pedidos: pedidos.data,
+      materiales_ia_v2: data?.materiales_ia_v2 || [],
+      pedidos: data?.pedidos || [],
+      tintas_master: data?.tintas_master || [],
+      biblioteca_tecnica: data?.biblioteca_tecnica || [],
+      biblioteca_componentes: data?.biblioteca_componentes || [],
+      tecnologias_impresion: data?.tecnologias_impresion || [],
+      proveedores: data?.proveedores || [],
+      cotizaciones_inteligentes: data?.cotizaciones_inteligentes || [],
     },
     reglas: [
-      "Primero usar materiales, tintas, biblioteca tecnica, tecnologias y proveedores registrados.",
+      "Primero usar la memoria operativa cargada desde Supabase RPC.",
       "No inventar precios.",
       "No inventar materiales.",
       "No inventar proveedores.",
@@ -495,6 +487,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
 
