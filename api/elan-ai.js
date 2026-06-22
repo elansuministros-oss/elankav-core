@@ -85,7 +85,7 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
     cotizacionesInteligentes,
     pedidos,
   ] = await Promise.all([
-    leerTablaSegura("materiales_ia_v2", 40),
+    leerTablaSegura("materiales_master_v2", 40)
     leerTablaSegura("tintas_master", 30),
     leerTablaSegura("biblioteca_tecnica", 30),
     leerTablaSegura("biblioteca_componentes", 40),
@@ -101,7 +101,7 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
     entrada_usuario: entradaUsuario,
     estado_fuentes: {
       supabase: "conectado",
-     materiales_ia_v2: materialesMaster.error || "ok",
+     materiales_ia_v2: materiales_master_v2:.error || "ok",
       tintas_master: tintasMaster.error ? "error" : "ok",
       biblioteca_tecnica: bibliotecaTecnica.error ? "error" : "ok",
       biblioteca_componentes: bibliotecaComponentes.error ? "error" : "ok",
@@ -111,7 +111,7 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
       pedidos: pedidos.error ? "error" : "ok",
     },
     fuentes: {
-      materiales_ia_v2: materialesMaster.data,
+      materiales_ia_v2: materiales_master_v2:.data,
       tintas_master: tintasMaster.data,
       biblioteca_tecnica: bibliotecaTecnica.data,
       biblioteca_componentes: bibliotecaComponentes.data,
