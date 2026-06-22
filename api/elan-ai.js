@@ -61,21 +61,14 @@ async function leerTablaSegura(nombre, limite = 25) {
     .limit(limite);
 
   if (error) {
-  console.error(
-    "AI-07 ERROR COMPLETO",
-    JSON.stringify(error, null, 2)
-  );
-
-  return {
-    data: [],
-    error: JSON.stringify({
+    console.error("AI-07 error leyendo tabla:", {
+      tabla,
+      select,
       message: error.message,
       details: error.details,
       hint: error.hint,
       code: error.code,
-    }),
-  };
-}
+    });
 
     return {
       data: [],
@@ -378,23 +371,14 @@ export default async function handler(req, res) {
     });
   }
 
- if (req.method === "GET") {
-  const supabaseUrl = process.env.SUPABASE_URL || "";
-
-  return res.status(200).json({
-    ok: true,
-    service: "ELANKAV CORE AI",
-    endpoint: "/api/elan-ai",
-    status: "online",
-    ai07_debug: {
-      supabase_configurado: Boolean(supabase),
-      supabase_url_host: supabaseUrl
-        ? new URL(supabaseUrl).host
-        : null,
-      commit_debug: "AI-07F-44fc680"
-    }
-  });
-}
+  if (req.method === "GET") {
+    return res.status(200).json({
+      ok: true,
+      service: "ELANKAV CORE AI",
+      endpoint: "/api/elan-ai",
+      status: "online"
+    });
+  }
 
   if (req.method !== "POST") {
     return res.status(405).json({
