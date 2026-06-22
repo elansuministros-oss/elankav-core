@@ -39,19 +39,47 @@ function setCors(req, res) {
 async function leerTablaSegura(nombre, limite = 25) {
   if (!supabase) return { data: [], error: "Supabase no configurado" };
 
+  const tabla = String(nombre || "").trim();
+
+  const SELECTS = {
+    materiales_ia_v2: "id,nombre,estado",
+    materiales_master_v2: "id,nombre,estado",
+    tintas_master: "*",
+    biblioteca_tecnica: "*",
+    biblioteca_componentes: "*",
+    tecnologias_impresion: "*",
+    proveedores: "*",
+    cotizaciones_inteligentes: "id,estado,created_at",
+    pedidos: "id,estado,created_at",
+  };
+
+  const select = SELECTS[tabla] || "*";
+
   const { data, error } = await supabase
-    .from(nombre)
-    .select(
-      nombre === "cotizaciones_inteligentes" || nombre === "pedidos"
-        ? "id,estado,created_at"
-        : "id,nombre,estado"
-    )
+    .from(tabla)
+    .select(select)
     .limit(limite);
 
   if (error) {
-    console.error(`AI-07 error leyendo ${nombre}:`, error.message);
-    return { data: [], error: error.message };
+    console.error("AI-07 error leyendo tabla:", {
+      tabla,
+      select,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
+
+    return {
+      data: [],
+      error: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    };
   }
+
+  console.log(`AI-07 OK ${tabla}: ${data?.length || 0} registros`);
 
   return { data: data || [], error: null };
 }
@@ -101,7 +129,7 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
     entrada_usuario: entradaUsuario,
     estado_fuentes: {
       supabase: "conectado",
-     materiales_ia_v2: materialesMaster.error || "ok",
+     materiales_ia_v2: materialesMaster.error ? "error" : "ok",
       tintas_master: tintasMaster.error ? "error" : "ok",
       biblioteca_tecnica: bibliotecaTecnica.error ? "error" : "ok",
       biblioteca_componentes: bibliotecaComponentes.error ? "error" : "ok",
