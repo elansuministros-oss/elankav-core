@@ -101,7 +101,7 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
     entrada_usuario: entradaUsuario,
     estado_fuentes: {
       supabase: "conectado",
-     materiales_ia_v2: materialesMaster.error ? "error" : "ok",
+     materiales_ia_v2: materialesMaster.error || "ok",
       tintas_master: tintasMaster.error ? "error" : "ok",
       biblioteca_tecnica: bibliotecaTecnica.error ? "error" : "ok",
       biblioteca_componentes: bibliotecaComponentes.error ? "error" : "ok",
