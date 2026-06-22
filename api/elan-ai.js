@@ -39,47 +39,19 @@ function setCors(req, res) {
 async function leerTablaSegura(nombre, limite = 25) {
   if (!supabase) return { data: [], error: "Supabase no configurado" };
 
-  const tabla = String(nombre || "").trim();
-
-  const SELECTS = {
-    materiales_ia_v2: "id,nombre,estado",
-    materiales_master_v2: "id,nombre,estado",
-    tintas_master: "*",
-    biblioteca_tecnica: "*",
-    biblioteca_componentes: "*",
-    tecnologias_impresion: "*",
-    proveedores: "*",
-    cotizaciones_inteligentes: "id,estado,created_at",
-    pedidos: "id,estado,created_at",
-  };
-
-  const select = SELECTS[tabla] || "*";
-
   const { data, error } = await supabase
-    .from(tabla)
-    .select(select)
+    .from(nombre)
+    .select(
+      nombre === "cotizaciones_inteligentes" || nombre === "pedidos"
+        ? "id,estado,created_at"
+        : "id,nombre,estado"
+    )
     .limit(limite);
 
   if (error) {
-    console.error("AI-07 error leyendo tabla:", {
-      tabla,
-      select,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      code: error.code,
-    });
-
-    return {
-      data: [],
-      error: error.message,
-      details: error.details,
-      hint: error.hint,
-      code: error.code,
-    };
+    console.error(`AI-07 error leyendo ${nombre}:`, error.message);
+    return { data: [], error: error.message };
   }
-
-  console.log(`AI-07 OK ${tabla}: ${data?.length || 0} registros`);
 
   return { data: data || [], error: null };
 }
@@ -87,12 +59,11 @@ async function leerTablaSegura(nombre, limite = 25) {
 async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad = "ELANVISUAL" } = {}) {
   if (!supabase) {
     return {
-      version: "AI-07-RPC",
+      version: "AI-07",
       unidad,
       entrada_usuario: entradaUsuario,
       estado_fuentes: {
         supabase: "no_configurado",
-        rpc: "no_configurado",
       },
       fuentes: {},
       reglas: [
@@ -104,51 +75,53 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
     };
   }
 
-  const { data, error } = await supabase.rpc("elan_ai_memoria");
-
-  if (error) {
-    console.error("AI-07 RPC error:", error);
-
-    return {
-      version: "AI-07-RPC",
-      unidad,
-      entrada_usuario: entradaUsuario,
-      estado_fuentes: {
-        supabase: "conectado",
-        rpc: error.message || "error_rpc",
-      },
-      fuentes: {},
-      reglas: [
-        "No inventar precios.",
-        "No inventar materiales.",
-        "No inventar proveedores.",
-        "Si no hay dato registrado, indicar pendiente de validacion.",
-      ],
-    };
-  }
+  const [
+    materialesMaster,
+    tintasMaster,
+    bibliotecaTecnica,
+    bibliotecaComponentes,
+    tecnologiasImpresion,
+    proveedores,
+    cotizacionesInteligentes,
+    pedidos,
+  ] = await Promise.all([
+    leerTablaSegura("materiales_ia_v2", 40),
+    leerTablaSegura("tintas_master", 30),
+    leerTablaSegura("biblioteca_tecnica", 30),
+    leerTablaSegura("biblioteca_componentes", 40),
+    leerTablaSegura("tecnologias_impresion", 30),
+    leerTablaSegura("proveedores", 30),
+    leerTablaSegura("cotizaciones_inteligentes", 15),
+    leerTablaSegura("pedidos", 15),
+  ]);
 
   return {
-    version: "AI-07-RPC",
+    version: "AI-07",
     unidad,
     entrada_usuario: entradaUsuario,
     estado_fuentes: {
       supabase: "conectado",
-      rpc: "ok",
-      materiales_ia_v2: Array.isArray(data?.materiales_ia_v2) ? "ok" : "sin_datos",
-      pedidos: Array.isArray(data?.pedidos) ? "ok" : "sin_datos",
+     materiales_ia_v2: materialesMaster.error || "ok",
+      tintas_master: tintasMaster.error ? "error" : "ok",
+      biblioteca_tecnica: bibliotecaTecnica.error ? "error" : "ok",
+      biblioteca_componentes: bibliotecaComponentes.error ? "error" : "ok",
+      tecnologias_impresion: tecnologiasImpresion.error ? "error" : "ok",
+      proveedores: proveedores.error ? "error" : "ok",
+      cotizaciones_inteligentes: cotizacionesInteligentes.error ? "error" : "ok",
+      pedidos: pedidos.error ? "error" : "ok",
     },
     fuentes: {
-      materiales_ia_v2: data?.materiales_ia_v2 || [],
-      pedidos: data?.pedidos || [],
-      tintas_master: data?.tintas_master || [],
-      biblioteca_tecnica: data?.biblioteca_tecnica || [],
-      biblioteca_componentes: data?.biblioteca_componentes || [],
-      tecnologias_impresion: data?.tecnologias_impresion || [],
-      proveedores: data?.proveedores || [],
-      cotizaciones_inteligentes: data?.cotizaciones_inteligentes || [],
+      materiales_ia_v2: materialesMaster.data,
+      tintas_master: tintasMaster.data,
+      biblioteca_tecnica: bibliotecaTecnica.data,
+      biblioteca_componentes: bibliotecaComponentes.data,
+      tecnologias_impresion: tecnologiasImpresion.data,
+      proveedores: proveedores.data,
+      cotizaciones_inteligentes: cotizacionesInteligentes.data,
+      pedidos: pedidos.data,
     },
     reglas: [
-      "Primero usar la memoria operativa cargada desde Supabase RPC.",
+      "Primero usar materiales, tintas, biblioteca tecnica, tecnologias y proveedores registrados.",
       "No inventar precios.",
       "No inventar materiales.",
       "No inventar proveedores.",
@@ -487,7 +460,6 @@ export default async function handler(req, res) {
     });
   }
 }
-
 
 
 
