@@ -61,14 +61,21 @@ async function leerTablaSegura(nombre, limite = 25) {
     .limit(limite);
 
   if (error) {
-    console.error("AI-07 error leyendo tabla:", {
-      tabla,
-      select,
+  console.error(
+    "AI-07 ERROR COMPLETO",
+    JSON.stringify(error, null, 2)
+  );
+
+  return {
+    data: [],
+    error: JSON.stringify({
       message: error.message,
       details: error.details,
       hint: error.hint,
       code: error.code,
-    });
+    }),
+  };
+}
 
     return {
       data: [],
