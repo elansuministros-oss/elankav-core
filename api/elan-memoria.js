@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+﻿import { createClient } from "@supabase/supabase-js";
 
 const supabase =
   process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -8,37 +8,24 @@ const supabase =
       )
     : null;
 
-async function probarTabla(nombre, select = "*", limite = 5) {
-  try {
-    const { data, error } = await supabase
-      .from(nombre)
-      .select(select)
-      .limit(limite);
+function compactarRegistro(registro = {}) {
+  const salida = {};
 
-    if (error) {
-      return {
-        ok: false,
-        tabla: nombre,
-        error: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      };
+  for (const [key, value] of Object.entries(registro || {})) {
+    if (value === null || value === undefined || value === "") continue;
+
+    if (typeof value === "string") {
+      salida[key] = value.slice(0, 240);
+    } else {
+      salida[key] = value;
     }
-
-    return {
-      ok: true,
-      tabla: nombre,
-      registros: data?.length || 0,
-      muestra: data || [],
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      tabla: nombre,
-      error: e.message,
-    };
   }
+
+  return salida;
+}
+
+function compactarArray(valor) {
+  return Array.isArray(valor) ? valor.map(compactarRegistro) : [];
 }
 
 export default async function handler(req, res) {
@@ -46,31 +33,60 @@ export default async function handler(req, res) {
     if (!supabase) {
       return res.status(500).json({
         ok: false,
-        error: "Supabase no configurado",
+        error: "Supabase no configurado"
       });
     }
 
-    const resultados = await Promise.all([
-      probarTabla("materiales_ia_v2", "id,nombre,estado", 3),
-      probarTabla("materiales_master_v2", "id,nombre,estado", 3),
-      probarTabla("tintas_master", "*", 3),
-      probarTabla("biblioteca_tecnica", "*", 3),
-      probarTabla("biblioteca_componentes", "*", 3),
-      probarTabla("tecnologias_impresion", "*", 3),
-      probarTabla("proveedores", "*", 3),
-      probarTabla("pedidos", "id,estado,created_at", 3),
-    ]);
+    const { data, error } = await supabase.rpc(
+      "elankav_memoria_operativa"
+    );
+
+    if (error) {
+      return res.status(500).json({
+        ok: false,
+        endpoint: "/api/elan-memoria",
+        metodo: "rpc",
+        rpc: "elankav_memoria_operativa",
+        supabase_url: process.env.SUPABASE_URL,
+        error: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+    }
+
+    const memoria = data || {};
 
     return res.status(200).json({
       ok: true,
       endpoint: "/api/elan-memoria",
+      metodo: "rpc",
+      rpc: "elankav_memoria_operativa",
       supabase_url: process.env.SUPABASE_URL,
-      resultados,
+      resultados: {
+        materiales_ia_v2: compactarArray(memoria.materiales_ia_v2).slice(0, 5),
+        materiales_master_v2: compactarArray(memoria.materiales_master_v2).slice(0, 5),
+        tintas_master: compactarArray(memoria.tintas_master).slice(0, 5),
+        biblioteca_tecnica: compactarArray(memoria.biblioteca_tecnica).slice(0, 5),
+        biblioteca_componentes: compactarArray(memoria.biblioteca_componentes).slice(0, 5),
+        tecnologias_impresion: compactarArray(memoria.tecnologias_impresion).slice(0, 5),
+        proveedores: compactarArray(memoria.proveedores).slice(0, 5)
+      },
+      conteos: {
+        materiales_ia_v2: compactarArray(memoria.materiales_ia_v2).length,
+        materiales_master_v2: compactarArray(memoria.materiales_master_v2).length,
+        tintas_master: compactarArray(memoria.tintas_master).length,
+        biblioteca_tecnica: compactarArray(memoria.biblioteca_tecnica).length,
+        biblioteca_componentes: compactarArray(memoria.biblioteca_componentes).length,
+        tecnologias_impresion: compactarArray(memoria.tecnologias_impresion).length,
+        proveedores: compactarArray(memoria.proveedores).length
+      }
     });
   } catch (error) {
     return res.status(500).json({
       ok: false,
-      error: error?.message || "Error inesperado",
+      endpoint: "/api/elan-memoria",
+      error: error?.message || "Error inesperado"
     });
   }
 }
