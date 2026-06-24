@@ -34,44 +34,41 @@ function setCors(req, res) {
   res.setHeader("Vary", "Origin");
 }
 
-
-
 async function leerTablaSegura(nombre, limite = 25) {
   if (!supabase) return { data: [], error: "Supabase no configurado" };
 
   const { data, error } = await supabase
     .from(nombre)
-    .select(
-      nombre === "cotizaciones_inteligentes" || nombre === "pedidos"
-        ? "id,estado,created_at"
-        : "id,nombre,estado"
-    )
+    .select("*")
     .limit(limite);
 
   if (error) {
-    console.error(`AI-07 error leyendo ${nombre}:`, error.message);
+    console.error(`AI-08 error leyendo ${nombre}:`, error.message);
     return { data: [], error: error.message };
   }
 
   return { data: data || [], error: null };
 }
 
-async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad = "ELANVISUAL" } = {}) {
+async function cargarMemoriaOperativaDesdeSupabase({
+  entradaUsuario = "",
+  unidad = "ELANVISUAL"
+} = {}) {
   if (!supabase) {
     return {
-      version: "AI-07",
+      version: "AI-08",
       unidad,
       entrada_usuario: entradaUsuario,
       estado_fuentes: {
-        supabase: "no_configurado",
+        supabase: "no_configurado"
       },
       fuentes: {},
       reglas: [
         "No inventar precios.",
         "No inventar materiales.",
         "No inventar proveedores.",
-        "Si no hay dato registrado, indicar pendiente de validacion.",
-      ],
+        "Si no hay dato registrado, indicar pendiente de validacion."
+      ]
     };
   }
 
@@ -83,32 +80,42 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
     tecnologiasImpresion,
     proveedores,
     cotizacionesInteligentes,
-    pedidos,
+    pedidos
   ] = await Promise.all([
-    leerTablaSegura("materiales_ia_v2", 40),
-    leerTablaSegura("tintas_master", 30),
-    leerTablaSegura("biblioteca_tecnica", 30),
-    leerTablaSegura("biblioteca_componentes", 40),
-    leerTablaSegura("tecnologias_impresion", 30),
-    leerTablaSegura("proveedores", 30),
+    leerTablaSegura("materiales_ia_v2", 60),
+    leerTablaSegura("tintas_master", 40),
+    leerTablaSegura("biblioteca_tecnica", 40),
+    leerTablaSegura("biblioteca_componentes", 60),
+    leerTablaSegura("tecnologias_impresion", 40),
+    leerTablaSegura("proveedores", 40),
     leerTablaSegura("cotizaciones_inteligentes", 15),
-    leerTablaSegura("pedidos", 15),
+    leerTablaSegura("pedidos", 15)
   ]);
 
   return {
-    version: "AI-07",
+    version: "AI-08",
     unidad,
     entrada_usuario: entradaUsuario,
     estado_fuentes: {
       supabase: "conectado",
-     materiales_ia_v2: materialesMaster.error || "ok",
+      materiales_ia_v2: materialesMaster.error ? "error" : "ok",
       tintas_master: tintasMaster.error ? "error" : "ok",
       biblioteca_tecnica: bibliotecaTecnica.error ? "error" : "ok",
       biblioteca_componentes: bibliotecaComponentes.error ? "error" : "ok",
       tecnologias_impresion: tecnologiasImpresion.error ? "error" : "ok",
       proveedores: proveedores.error ? "error" : "ok",
       cotizaciones_inteligentes: cotizacionesInteligentes.error ? "error" : "ok",
-      pedidos: pedidos.error ? "error" : "ok",
+      pedidos: pedidos.error ? "error" : "ok"
+    },
+    errores_fuentes: {
+      materiales_ia_v2: materialesMaster.error,
+      tintas_master: tintasMaster.error,
+      biblioteca_tecnica: bibliotecaTecnica.error,
+      biblioteca_componentes: bibliotecaComponentes.error,
+      tecnologias_impresion: tecnologiasImpresion.error,
+      proveedores: proveedores.error,
+      cotizaciones_inteligentes: cotizacionesInteligentes.error,
+      pedidos: pedidos.error
     },
     fuentes: {
       materiales_ia_v2: materialesMaster.data,
@@ -118,7 +125,7 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
       tecnologias_impresion: tecnologiasImpresion.data,
       proveedores: proveedores.data,
       cotizaciones_inteligentes: cotizacionesInteligentes.data,
-      pedidos: pedidos.data,
+      pedidos: pedidos.data
     },
     reglas: [
       "Primero usar materiales, tintas, biblioteca tecnica, tecnologias y proveedores registrados.",
@@ -127,41 +134,93 @@ async function cargarMemoriaOperativaDesdeSupabase({ entradaUsuario = "", unidad
       "No inventar proveedores.",
       "No inventar recetas constructivas.",
       "Si un precio no esta registrado, responder pendiente de validacion.",
-      "Si hay datos suficientes, preparar cotizacion preliminar sin crear precio falso.",
-    ],
+      "Si existe precio_m2, precio_unitario, costo, precio, valor, tarifa o unidad registrada, usarlo para calcular.",
+      "Si hay datos suficientes, preparar cotizacion preliminar.",
+      "Para lonas, viniles o impresion por area: area = ancho x alto.",
+      "Para ojetes cada 50 cm: calcular sobre perimetro. Perimetro = (ancho + alto) x 2.",
+      "Cantidad de ojetes aproximada = perimetro / separacion.",
+      "Si hay precio por metro cuadrado y area, calcular subtotal.",
+      "Si hay precio unitario de componente, calcular subtotal por cantidad."
+    ]
   };
 }
+
 function construirContextoMemoriaOperativa(memoriaOperativa = null) {
   if (!memoriaOperativa || typeof memoriaOperativa !== "object") return "";
 
   const fuentes = memoriaOperativa.fuentes || {};
   const produccion = memoriaOperativa.produccion_preliminar || {};
   const estadoFuentes = memoriaOperativa.estado_fuentes || {};
+  const erroresFuentes = memoriaOperativa.errores_fuentes || {};
 
   const resumen = {
-    version: memoriaOperativa.version || "AI-05",
+    version: memoriaOperativa.version || "AI-08",
     unidad: memoriaOperativa.unidad || "ELANVISUAL",
     proyecto: memoriaOperativa.proyecto || null,
     entrada_usuario: memoriaOperativa.entrada_usuario || "",
     estado_fuentes: estadoFuentes,
-    materiales_ia_v2: Array.isArray(fuentes.materiales_ia_v2) ? fuentes.materiales_ia_v2.slice(0, 12) : [],
-    tintas_master: Array.isArray(fuentes.tintas_master) ? fuentes.tintas_master.slice(0, 5) : [],
-    biblioteca_tecnica: Array.isArray(fuentes.biblioteca_tecnica) ? fuentes.biblioteca_tecnica.slice(0, 5) : [],
-    biblioteca_componentes: Array.isArray(fuentes.biblioteca_componentes) ? fuentes.biblioteca_componentes.slice(0, 8) : [],
-    tecnologias_impresion: Array.isArray(fuentes.tecnologias_impresion) ? fuentes.tecnologias_impresion.slice(0, 6) : [],
-    proveedores: Array.isArray(fuentes.proveedores) ? fuentes.proveedores.slice(0, 5) : [],
-    cotizaciones_inteligentes: Array.isArray(fuentes.cotizaciones_inteligentes) ? fuentes.cotizaciones_inteligentes.slice(0, 3) : [],
-    pedidos: Array.isArray(fuentes.pedidos) ? fuentes.pedidos.slice(0, 3) : [],
+    errores_fuentes: erroresFuentes,
+    materiales_ia_v2: Array.isArray(fuentes.materiales_ia_v2)
+      ? fuentes.materiales_ia_v2.slice(0, 25)
+      : [],
+    tintas_master: Array.isArray(fuentes.tintas_master)
+      ? fuentes.tintas_master.slice(0, 15)
+      : [],
+    biblioteca_tecnica: Array.isArray(fuentes.biblioteca_tecnica)
+      ? fuentes.biblioteca_tecnica.slice(0, 12)
+      : [],
+    biblioteca_componentes: Array.isArray(fuentes.biblioteca_componentes)
+      ? fuentes.biblioteca_componentes.slice(0, 20)
+      : [],
+    tecnologias_impresion: Array.isArray(fuentes.tecnologias_impresion)
+      ? fuentes.tecnologias_impresion.slice(0, 12)
+      : [],
+    proveedores: Array.isArray(fuentes.proveedores)
+      ? fuentes.proveedores.slice(0, 10)
+      : [],
+    cotizaciones_inteligentes: Array.isArray(fuentes.cotizaciones_inteligentes)
+      ? fuentes.cotizaciones_inteligentes.slice(0, 3)
+      : [],
+    pedidos: Array.isArray(fuentes.pedidos)
+      ? fuentes.pedidos.slice(0, 3)
+      : [],
     produccion_preliminar: produccion,
-    reglas: memoriaOperativa.reglas || [],
+    reglas: memoriaOperativa.reglas || []
   };
 
   return `
-CONTEXTO TECNICO OPERATIVO ELANVISUAL / AI-05:
+CONTEXTO TECNICO OPERATIVO ELANVISUAL / AI-08:
 Usa este contexto como memoria operativa antes de responder.
 No inventes materiales, precios, proveedores, tecnologías ni procesos.
 Si un dato no existe en este contexto, marcá: "pendiente de validación".
 El despiece y producción son preliminares hasta validación técnica.
+
+REGLA CRÍTICA DE COTIZACIÓN:
+Si el usuario pide precio, presupuesto o cotización, calculá todo lo posible con los datos disponibles.
+No bloquees la cotización por falta de datos menores.
+Si existe precio_m2, precio_unitario, precio, costo, tarifa o valor en las fuentes, úsalo.
+Si no existe precio oficial, indicá pendiente de validación.
+
+REGLAS DE CÁLCULO:
+- Área = ancho x alto.
+- Perímetro = (ancho + alto) x 2.
+- Ojete cada 50 cm = perímetro / 0.50.
+- Para lona 2x2 m: área = 4 m².
+- Para lona 2x2 m: perímetro = 8 ml.
+- Para ojete cada 50 cm: cantidad aproximada = 16 ojetes.
+- Si el usuario pide impresión full color, asumir impresión incluida.
+- Si el usuario pide instalado, incluir instalación solo si hay tarifa registrada.
+- Si no hay tarifa de instalación, marcar pendiente de validación.
+
+FORMATO DE RESPUESTA PARA COTIZACIÓN:
+1. Cotización preliminar
+2. Medidas y cálculo
+3. Material / tecnología usada
+4. Despiece preliminar
+5. Subtotales si existen precios registrados
+6. Total preliminar si hay datos suficientes
+7. Pendientes de validación
+8. Siguiente acción recomendada
 
 AI-06 CONSULTA TECNICA AUTOMATICA:
 Cuando la memoria incluya ai06_consulta_tecnica, respondé como asesor técnico operativo.
@@ -193,14 +252,6 @@ Estados comerciales:
 
 Regla crítica:
 Si el usuario manda una nueva medida después de haber enviado una cotización al cotizador, tratala como nueva consulta rápida, salvo que indique explícitamente el número de cotización a modificar.
-
-Reglas AI-06:
-- No inventar precios.
-- No inventar proveedores.
-- No inventar materiales.
-- Si no hay coincidencias, indicar pendiente de validación.
-- Si hay medidas, calcular área aproximada.
-- Si aplica producción, usar produccion_preliminar.
 
 ${JSON.stringify(resumen, null, 2)}
 `;
@@ -289,15 +340,13 @@ async function buscarClientes(texto = "", usuario = {}) {
     .limit(8);
 
   if (usuario?.rol === "ventas" && usuario?.id) {
-    query = query.or(
-      `vendedor_id.eq.${usuario.id},vendedor_id.is.null`
-    );
+    query = query.or(`vendedor_id.eq.${usuario.id},vendedor_id.is.null`);
   }
 
   const { data, error } = await query;
 
   if (error) {
-    console.error("Error buscando clientes:", error);
+    console.error("Error buscando clientes:", error.message);
     return [];
   }
 
@@ -341,7 +390,8 @@ export default async function handler(req, res) {
       ok: true,
       service: "ELANKAV CORE AI",
       endpoint: "/api/elan-ai",
-      status: "online"
+      status: "online",
+      version: "AI-08"
     });
   }
 
@@ -384,10 +434,12 @@ export default async function handler(req, res) {
 
     const textoUsuario = ultimoTextoUsuario(mensajes);
 
-    const memoriaOperativa = memoriaOperativaBase || await cargarMemoriaOperativaDesdeSupabase({
-      entradaUsuario: textoUsuario,
-      unidad,
-    });
+    const memoriaOperativa =
+      memoriaOperativaBase ||
+      (await cargarMemoriaOperativaDesdeSupabase({
+        entradaUsuario: textoUsuario,
+        unidad
+      }));
 
     const clientes =
       unidad === "ELANVISUAL"
@@ -396,12 +448,12 @@ export default async function handler(req, res) {
 
     const system = [
       "Eres ELANKAV CORE AI.",
-      "Para ELANVISUAL trabajas como asesor comercial senior.",
+      "Para ELANVISUAL trabajas como asesor comercial senior y técnico de rotulación.",
       "Tu prioridad es responder, resolver y cotizar, no entrevistar.",
       "Extrae automáticamente toda la información posible del mensaje del usuario.",
       "No hagas preguntas sobre información que ya fue proporcionada.",
       "Máximo una pregunta por respuesta.",
-      "Si identificas producto, medidas y ciudad debes avanzar inmediatamente hacia una cotización preliminar.",
+      "Si identificas producto y medidas debes avanzar inmediatamente hacia una cotización preliminar.",
       "Si el usuario pide cotización, presupuesto o precio, activa automáticamente MODO COTIZADOR.",
       "Primero cotiza. Después completa detalles si son necesarios.",
       "No bloquees una cotización por falta de CRM.",
@@ -416,11 +468,18 @@ export default async function handler(req, res) {
       "Interpreta automáticamente:",
       "'full color' = impresión full color.",
       "'vinil adhesivo impreso' = impresión incluida.",
+      "'lona impresa' = lona con impresión incluida.",
       "'sobre laminado' = laminado incluido.",
       "'instalado' = instalación incluida.",
       "'sin instalación' = instalación no incluida.",
       "'fachada existente' = estructura existente.",
-      "Utiliza información del CRM, proyecto y contexto cuando exista.",
+      "Usa la memoria operativa de Supabase antes de responder.",
+      "Si existe precio_m2, precio_unitario, precio, costo, tarifa o valor en memoria operativa, úsalo para calcular.",
+      "Para lonas, viniles o impresión por área: área = ancho x alto.",
+      "Para ojetes cada 50 cm: calcular sobre perímetro. Perímetro = (ancho + alto) x 2.",
+      "Cantidad de ojetes aproximada = perímetro / separación.",
+      "Si hay precio por m² y área, calcular subtotal.",
+      "Si hay precio unitario de componente, calcular subtotal por cantidad.",
       "Si no existe un precio oficial disponible, genera una propuesta preliminar estructurada sin inventar costos.",
       "Responde de forma breve, comercial, directa y útil para vendedores.",
       `Unidad: ${unidad}`,
@@ -440,7 +499,10 @@ export default async function handler(req, res) {
           role: "system",
           content: system
         },
-        { role: 'developer', content: construirContextoMemoriaOperativa(memoriaOperativa) },
+        {
+          role: "developer",
+          content: construirContextoMemoriaOperativa(memoriaOperativa)
+        },
         ...mensajes
       ]
     });
@@ -449,7 +511,8 @@ export default async function handler(req, res) {
       ok: true,
       respuesta: response.output_text || "",
       clientes,
-      debug_estado_fuentes: memoriaOperativa?.estado_fuentes || null
+      debug_estado_fuentes: memoriaOperativa?.estado_fuentes || null,
+      debug_errores_fuentes: memoriaOperativa?.errores_fuentes || null
     });
   } catch (error) {
     console.error("Error ELANKAV CORE AI:", error);
@@ -460,13 +523,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
-
-
-
-
-
-
-
-
-
