@@ -38,7 +38,8 @@ export default async function handler(req, res) {
     }
 
     const { data, error } = await supabase.rpc(
-      "elankav_memoria_operativa"
+      "elankav_memoria_operativa",
+      { payload: {} }
     );
 
     if (error) {
@@ -60,7 +61,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       endpoint: "/api/elan-memoria",
-      metodo: "rpc",
+      metodo: "rpc_payload",
       rpc: "elankav_memoria_operativa",
       supabase_url: process.env.SUPABASE_URL,
       resultados: {
