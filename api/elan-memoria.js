@@ -14,11 +14,7 @@ function compactarRegistro(registro = {}) {
   for (const [key, value] of Object.entries(registro || {})) {
     if (value === null || value === undefined || value === "") continue;
 
-    if (typeof value === "string") {
-      salida[key] = value.slice(0, 240);
-    } else {
-      salida[key] = value;
-    }
+    salida[key] = typeof value === "string" ? value.slice(0, 240) : value;
   }
 
   return salida;
@@ -38,15 +34,14 @@ export default async function handler(req, res) {
     }
 
     const { data, error } = await supabase.rpc(
-      "elankav_memoria_operativa",
-      { payload: {} }
+      "elankav_memoria_operativa"
     );
 
     if (error) {
       return res.status(500).json({
         ok: false,
         endpoint: "/api/elan-memoria",
-        metodo: "rpc",
+        metodo: "rpc_sin_argumentos",
         rpc: "elankav_memoria_operativa",
         supabase_url: process.env.SUPABASE_URL,
         error: error.message,
@@ -58,30 +53,34 @@ export default async function handler(req, res) {
 
     const memoria = data || {};
 
+    const resultados = {
+      materiales_ia_v2: compactarArray(memoria.materiales_ia_v2).slice(0, 5),
+      materiales_master_v2: compactarArray(memoria.materiales_master_v2).slice(0, 5),
+      tintas_master: compactarArray(memoria.tintas_master).slice(0, 5),
+      biblioteca_tecnica: compactarArray(memoria.biblioteca_tecnica).slice(0, 5),
+      biblioteca_componentes: compactarArray(memoria.biblioteca_componentes).slice(0, 5),
+      tecnologias_impresion: compactarArray(memoria.tecnologias_impresion).slice(0, 5),
+      proveedores: compactarArray(memoria.proveedores).slice(0, 5)
+    };
+
+    const conteos = {
+      materiales_ia_v2: compactarArray(memoria.materiales_ia_v2).length,
+      materiales_master_v2: compactarArray(memoria.materiales_master_v2).length,
+      tintas_master: compactarArray(memoria.tintas_master).length,
+      biblioteca_tecnica: compactarArray(memoria.biblioteca_tecnica).length,
+      biblioteca_componentes: compactarArray(memoria.biblioteca_componentes).length,
+      tecnologias_impresion: compactarArray(memoria.tecnologias_impresion).length,
+      proveedores: compactarArray(memoria.proveedores).length
+    };
+
     return res.status(200).json({
       ok: true,
       endpoint: "/api/elan-memoria",
-      metodo: "rpc_payload",
+      metodo: "rpc_sin_argumentos",
       rpc: "elankav_memoria_operativa",
       supabase_url: process.env.SUPABASE_URL,
-      resultados: {
-        materiales_ia_v2: compactarArray(memoria.materiales_ia_v2).slice(0, 5),
-        materiales_master_v2: compactarArray(memoria.materiales_master_v2).slice(0, 5),
-        tintas_master: compactarArray(memoria.tintas_master).slice(0, 5),
-        biblioteca_tecnica: compactarArray(memoria.biblioteca_tecnica).slice(0, 5),
-        biblioteca_componentes: compactarArray(memoria.biblioteca_componentes).slice(0, 5),
-        tecnologias_impresion: compactarArray(memoria.tecnologias_impresion).slice(0, 5),
-        proveedores: compactarArray(memoria.proveedores).slice(0, 5)
-      },
-      conteos: {
-        materiales_ia_v2: compactarArray(memoria.materiales_ia_v2).length,
-        materiales_master_v2: compactarArray(memoria.materiales_master_v2).length,
-        tintas_master: compactarArray(memoria.tintas_master).length,
-        biblioteca_tecnica: compactarArray(memoria.biblioteca_tecnica).length,
-        biblioteca_componentes: compactarArray(memoria.biblioteca_componentes).length,
-        tecnologias_impresion: compactarArray(memoria.tecnologias_impresion).length,
-        proveedores: compactarArray(memoria.proveedores).length
-      }
+      conteos,
+      resultados
     });
   } catch (error) {
     return res.status(500).json({
