@@ -34,6 +34,22 @@ function setCors(req, res) {
   res.setHeader("Vary", "Origin");
 }
 
+function compactarRegistro(registro = {}) {
+  const salida = {};
+
+  for (const [key, value] of Object.entries(registro || {})) {
+    if (value === null || value === undefined || value === "") continue;
+
+    if (typeof value === "string") {
+      salida[key] = value.slice(0, 240);
+    } else {
+      salida[key] = value;
+    }
+  }
+
+  return salida;
+}
+
 async function leerTablaSegura(nombre, limite = 25) {
   if (!supabase) return { data: [], error: "Supabase no configurado" };
 
@@ -47,7 +63,10 @@ async function leerTablaSegura(nombre, limite = 25) {
     return { data: [], error: error.message };
   }
 
-  return { data: data || [], error: null };
+  return {
+    data: Array.isArray(data) ? data.map(compactarRegistro) : [],
+    error: null
+  };
 }
 
 async function cargarMemoriaOperativaDesdeSupabase({
@@ -56,7 +75,7 @@ async function cargarMemoriaOperativaDesdeSupabase({
 } = {}) {
   if (!supabase) {
     return {
-      version: "AI-08",
+      version: "AI-08.1",
       unidad,
       entrada_usuario: entradaUsuario,
       estado_fuentes: {
@@ -82,18 +101,18 @@ async function cargarMemoriaOperativaDesdeSupabase({
     cotizacionesInteligentes,
     pedidos
   ] = await Promise.all([
-    leerTablaSegura("materiales_ia_v2", 60),
-    leerTablaSegura("tintas_master", 40),
-    leerTablaSegura("biblioteca_tecnica", 40),
-    leerTablaSegura("biblioteca_componentes", 60),
-    leerTablaSegura("tecnologias_impresion", 40),
-    leerTablaSegura("proveedores", 40),
-    leerTablaSegura("cotizaciones_inteligentes", 15),
-    leerTablaSegura("pedidos", 15)
+    leerTablaSegura("materiales_ia_v2", 40),
+    leerTablaSegura("tintas_master", 25),
+    leerTablaSegura("biblioteca_tecnica", 25),
+    leerTablaSegura("biblioteca_componentes", 35),
+    leerTablaSegura("tecnologias_impresion", 25),
+    leerTablaSegura("proveedores", 25),
+    leerTablaSegura("cotizaciones_inteligentes", 8),
+    leerTablaSegura("pedidos", 8)
   ]);
 
   return {
-    version: "AI-08",
+    version: "AI-08.1",
     unidad,
     entrada_usuario: entradaUsuario,
     estado_fuentes: {
@@ -149,55 +168,42 @@ function construirContextoMemoriaOperativa(memoriaOperativa = null) {
   if (!memoriaOperativa || typeof memoriaOperativa !== "object") return "";
 
   const fuentes = memoriaOperativa.fuentes || {};
-  const produccion = memoriaOperativa.produccion_preliminar || {};
-  const estadoFuentes = memoriaOperativa.estado_fuentes || {};
-  const erroresFuentes = memoriaOperativa.errores_fuentes || {};
 
   const resumen = {
-    version: memoriaOperativa.version || "AI-08",
+    version: memoriaOperativa.version || "AI-08.1",
     unidad: memoriaOperativa.unidad || "ELANVISUAL",
-    proyecto: memoriaOperativa.proyecto || null,
     entrada_usuario: memoriaOperativa.entrada_usuario || "",
-    estado_fuentes: estadoFuentes,
-    errores_fuentes: erroresFuentes,
+    estado_fuentes: memoriaOperativa.estado_fuentes || {},
+    errores_fuentes: memoriaOperativa.errores_fuentes || {},
     materiales_ia_v2: Array.isArray(fuentes.materiales_ia_v2)
-      ? fuentes.materiales_ia_v2.slice(0, 25)
+      ? fuentes.materiales_ia_v2.slice(0, 20)
       : [],
     tintas_master: Array.isArray(fuentes.tintas_master)
-      ? fuentes.tintas_master.slice(0, 15)
+      ? fuentes.tintas_master.slice(0, 10)
       : [],
     biblioteca_tecnica: Array.isArray(fuentes.biblioteca_tecnica)
-      ? fuentes.biblioteca_tecnica.slice(0, 12)
+      ? fuentes.biblioteca_tecnica.slice(0, 8)
       : [],
     biblioteca_componentes: Array.isArray(fuentes.biblioteca_componentes)
-      ? fuentes.biblioteca_componentes.slice(0, 20)
+      ? fuentes.biblioteca_componentes.slice(0, 15)
       : [],
     tecnologias_impresion: Array.isArray(fuentes.tecnologias_impresion)
-      ? fuentes.tecnologias_impresion.slice(0, 12)
+      ? fuentes.tecnologias_impresion.slice(0, 8)
       : [],
     proveedores: Array.isArray(fuentes.proveedores)
-      ? fuentes.proveedores.slice(0, 10)
+      ? fuentes.proveedores.slice(0, 8)
       : [],
-    cotizaciones_inteligentes: Array.isArray(fuentes.cotizaciones_inteligentes)
-      ? fuentes.cotizaciones_inteligentes.slice(0, 3)
-      : [],
-    pedidos: Array.isArray(fuentes.pedidos)
-      ? fuentes.pedidos.slice(0, 3)
-      : [],
-    produccion_preliminar: produccion,
     reglas: memoriaOperativa.reglas || []
   };
 
   return `
-CONTEXTO TECNICO OPERATIVO ELANVISUAL / AI-08:
+CONTEXTO TECNICO OPERATIVO ELANVISUAL / AI-08.1:
 Usa este contexto como memoria operativa antes de responder.
 No inventes materiales, precios, proveedores, tecnologías ni procesos.
 Si un dato no existe en este contexto, marcá: "pendiente de validación".
-El despiece y producción son preliminares hasta validación técnica.
 
 REGLA CRÍTICA DE COTIZACIÓN:
 Si el usuario pide precio, presupuesto o cotización, calculá todo lo posible con los datos disponibles.
-No bloquees la cotización por falta de datos menores.
 Si existe precio_m2, precio_unitario, precio, costo, tarifa o valor en las fuentes, úsalo.
 Si no existe precio oficial, indicá pendiente de validación.
 
@@ -208,9 +214,8 @@ REGLAS DE CÁLCULO:
 - Para lona 2x2 m: área = 4 m².
 - Para lona 2x2 m: perímetro = 8 ml.
 - Para ojete cada 50 cm: cantidad aproximada = 16 ojetes.
-- Si el usuario pide impresión full color, asumir impresión incluida.
+- Si el usuario pide lona impresa, asumir impresión incluida.
 - Si el usuario pide instalado, incluir instalación solo si hay tarifa registrada.
-- Si no hay tarifa de instalación, marcar pendiente de validación.
 
 FORMATO DE RESPUESTA PARA COTIZACIÓN:
 1. Cotización preliminar
@@ -221,37 +226,6 @@ FORMATO DE RESPUESTA PARA COTIZACIÓN:
 6. Total preliminar si hay datos suficientes
 7. Pendientes de validación
 8. Siguiente acción recomendada
-
-AI-06 CONSULTA TECNICA AUTOMATICA:
-Cuando la memoria incluya ai06_consulta_tecnica, respondé como asesor técnico operativo.
-Primero usá los registros relevantes detectados.
-Estructurá la respuesta así:
-1. Diagnóstico técnico
-2. Solución recomendada
-3. Materiales reales disponibles
-4. Tecnología de producción
-5. Proveedor sugerido si existe
-6. Despiece preliminar
-7. Datos faltantes o pendientes de validación
-8. Siguiente acción recomendada
-
-AI-06B REGLAS COMERCIALES:
-Usá ai06b_reglas_comerciales para decidir si preguntás o avanzás.
-
-Modos de precio:
-- fijo: NO preguntar tinta; usar receta/precio predefinido si existe.
-- configurable: si requiere_preguntar_tinta es true, preguntar tinta/tecnología antes de mandar al cotizador.
-- tecnico: preguntar solo datos indispensables de fabricación, instalación o medida.
-- general: responder como consulta rápida.
-
-Estados comerciales:
-- consulta_rapida: responder precio o análisis preliminar; NO crear cotización.
-- cotizacion_en_preparacion: validar datos obligatorios y preparar envío al cotizador.
-- cotizacion_enviada_al_cotizador: cerrar contexto de esa cotización.
-- modificacion_cotizacion_existente: solo modificar si viene número/código de cotización.
-
-Regla crítica:
-Si el usuario manda una nueva medida después de haber enviado una cotización al cotizador, tratala como nueva consulta rápida, salvo que indique explícitamente el número de cotización a modificar.
 
 ${JSON.stringify(resumen, null, 2)}
 `;
@@ -285,72 +259,6 @@ function ultimoTextoUsuario(mensajes = []) {
   return String(
     ultimos.find((m) => m.role === "user")?.content || ""
   ).trim();
-}
-
-function limpiarBusqueda(valor = "") {
-  return String(valor)
-    .trim()
-    .replace(/[^\p{L}\p{N}\s@.+-]/gu, " ")
-    .replace(/\s+/g, " ")
-    .slice(0, 80);
-}
-
-async function buscarClientes(texto = "", usuario = {}) {
-  if (!supabase) return [];
-
-  const q = limpiarBusqueda(texto);
-
-  if (!q || q.length < 2) return [];
-
-  const like = `%${q}%`;
-
-  let query = supabase
-    .from("clientes")
-    .select(
-      `
-      id,
-      cliente,
-      empresa,
-      nombre,
-      contacto,
-      whatsapp,
-      telefono,
-      correo,
-      email,
-      ruc,
-      ciudad,
-      vendedor_id,
-      vendedor_nombre
-    `
-    )
-    .or(
-      [
-        `cliente.ilike.${like}`,
-        `empresa.ilike.${like}`,
-        `nombre.ilike.${like}`,
-        `contacto.ilike.${like}`,
-        `whatsapp.ilike.${like}`,
-        `telefono.ilike.${like}`,
-        `correo.ilike.${like}`,
-        `email.ilike.${like}`,
-        `ruc.ilike.${like}`,
-        `ciudad.ilike.${like}`
-      ].join(",")
-    )
-    .limit(8);
-
-  if (usuario?.rol === "ventas" && usuario?.id) {
-    query = query.or(`vendedor_id.eq.${usuario.id},vendedor_id.is.null`);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("Error buscando clientes:", error.message);
-    return [];
-  }
-
-  return data || [];
 }
 
 function contextoClientes(clientes = []) {
@@ -391,7 +299,7 @@ export default async function handler(req, res) {
       service: "ELANKAV CORE AI",
       endpoint: "/api/elan-ai",
       status: "online",
-      version: "AI-08"
+      version: "AI-08.1"
     });
   }
 
@@ -441,16 +349,7 @@ export default async function handler(req, res) {
         unidad
       }));
 
-    const memoriaOperativa =
-  memoriaOperativaBase ||
-  (await cargarMemoriaOperativaDesdeSupabase({
-    entradaUsuario: textoUsuario,
-    unidad
-  }));
-
-const clientes = [];
-
-const system = [
+    const clientes = [];
 
     const system = [
       "Eres ELANKAV CORE AI.",
@@ -464,7 +363,6 @@ const system = [
       "Primero cotiza. Después completa detalles si son necesarios.",
       "No bloquees una cotización por falta de CRM.",
       "No obligues a registrar clientes para cotizar.",
-      "Si existe coincidencia CRM puedes mencionarla, pero no detengas la cotización.",
       "No preguntes si desea PDF antes de generar la cotización.",
       "No preguntes por IVA salvo que sea necesario.",
       "No preguntes por instalación si el usuario escribió instalado.",
