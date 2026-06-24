@@ -441,10 +441,16 @@ export default async function handler(req, res) {
         unidad
       }));
 
-    const clientes =
-      unidad === "ELANVISUAL"
-        ? await buscarClientes(textoUsuario, usuario)
-        : [];
+    const memoriaOperativa =
+  memoriaOperativaBase ||
+  (await cargarMemoriaOperativaDesdeSupabase({
+    entradaUsuario: textoUsuario,
+    unidad
+  }));
+
+const clientes = [];
+
+const system = [
 
     const system = [
       "Eres ELANKAV CORE AI.",
