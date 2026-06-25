@@ -1,13 +1,10 @@
 ﻿import OpenAI from "openai";
-import { createClient } from "@supabase/supabase-js";
+import {
+  crearClienteSupabase,
+  obtenerMemoriaOperativa
+} from "../lib/memoria-operativa.js";
 
-const supabase =
-  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      )
-    : null;
+const supabase = crearClienteSupabase();
 
 const allowedOrigins = [
   "https://visual.elankav.com",
@@ -19,7 +16,6 @@ const allowedOrigins = [
 
 function setCors(req, res) {
   const origin = req.headers.origin || "";
-
   const allowOrigin = allowedOrigins.includes(origin)
     ? origin
     : "https://visual.elankav.com";
@@ -34,150 +30,59 @@ function setCors(req, res) {
   res.setHeader("Vary", "Origin");
 }
 
-function compactarRegistro(registro = {}) {
-  const salida = {};
+function filtrarMaterialesRelevantes(materiales = [], texto = "") {
+  const t = String(texto || "").toLowerCase();
 
-  for (const [key, value] of Object.entries(registro || {})) {
-    if (value === null || value === undefined || value === "") continue;
+  const palabras = [];
 
-    if (typeof value === "string") {
-      salida[key] = value.slice(0, 240);
-    } else {
-      salida[key] = value;
-    }
-  }
+  if (t.includes("lona") || t.includes("banner")) palabras.push("lona", "banner");
+  if (t.includes("traslucida") || t.includes("traslúcida")) palabras.push("traslucida", "traslúcida");
+  if (t.includes("mesh")) palabras.push("mesh");
+  if (t.includes("vinil")) palabras.push("vinil");
+  if (t.includes("micro")) palabras.push("microperforado");
+  if (t.includes("pvc")) palabras.push("pvc");
+  if (t.includes("acrilico") || t.includes("acrílico")) palabras.push("acrilico", "acrílico");
+  if (t.includes("acm")) palabras.push("acm");
 
-  return salida;
-}
+  if (!palabras.length) return materiales.slice(0, 20);
 
-async function leerTablaSegura(nombre, limite = 25) {
-  if (!supabase) return { data: [], error: "Supabase no configurado" };
+  return materiales
+    .filter((m) => {
+      const nombre = String(m.nombre || "").toLowerCase();
+      const categoria = String(m.categoria || "").toLowerCase();
 
-  const { data, error } = await supabase
-    .from(nombre)
-    .select("*")
-    .limit(limite);
-
-  if (error) {
-    console.error(`AI-08 error leyendo ${nombre}:`, error.message);
-    return { data: [], error: error.message };
-  }
-
-  return {
-    data: Array.isArray(data) ? data.map(compactarRegistro) : [],
-    error: null
-  };
-}
-
-async function cargarMemoriaOperativaDesdeSupabase({
-  entradaUsuario = "",
-  unidad = "ELANVISUAL"
-} = {}) {
-  if (!supabase) {
-    return {
-      version: "AI-08.1",
-      unidad,
-      entrada_usuario: entradaUsuario,
-      estado_fuentes: {
-        supabase: "no_configurado"
-      },
-      fuentes: {},
-      reglas: [
-        "No inventar precios.",
-        "No inventar materiales.",
-        "No inventar proveedores.",
-        "Si no hay dato registrado, indicar pendiente de validacion."
-      ]
-    };
-  }
-
-  const [
-    materialesMaster,
-    tintasMaster,
-    bibliotecaTecnica,
-    bibliotecaComponentes,
-    tecnologiasImpresion,
-    proveedores,
-    cotizacionesInteligentes,
-    pedidos
-  ] = await Promise.all([
-    leerTablaSegura("materiales_ia_v2", 40),
-    leerTablaSegura("tintas_master", 25),
-    leerTablaSegura("biblioteca_tecnica", 25),
-    leerTablaSegura("biblioteca_componentes", 35),
-    leerTablaSegura("tecnologias_impresion", 25),
-    leerTablaSegura("proveedores", 25),
-    leerTablaSegura("cotizaciones_inteligentes", 8),
-    leerTablaSegura("pedidos", 8)
-  ]);
-
-  return {
-    version: "AI-08.1",
-    unidad,
-    entrada_usuario: entradaUsuario,
-    estado_fuentes: {
-      supabase: "conectado",
-      materiales_ia_v2: materialesMaster.error ? "error" : "ok",
-      tintas_master: tintasMaster.error ? "error" : "ok",
-      biblioteca_tecnica: bibliotecaTecnica.error ? "error" : "ok",
-      biblioteca_componentes: bibliotecaComponentes.error ? "error" : "ok",
-      tecnologias_impresion: tecnologiasImpresion.error ? "error" : "ok",
-      proveedores: proveedores.error ? "error" : "ok",
-      cotizaciones_inteligentes: cotizacionesInteligentes.error ? "error" : "ok",
-      pedidos: pedidos.error ? "error" : "ok"
-    },
-    errores_fuentes: {
-      materiales_ia_v2: materialesMaster.error,
-      tintas_master: tintasMaster.error,
-      biblioteca_tecnica: bibliotecaTecnica.error,
-      biblioteca_componentes: bibliotecaComponentes.error,
-      tecnologias_impresion: tecnologiasImpresion.error,
-      proveedores: proveedores.error,
-      cotizaciones_inteligentes: cotizacionesInteligentes.error,
-      pedidos: pedidos.error
-    },
-    fuentes: {
-      materiales_ia_v2: materialesMaster.data,
-      tintas_master: tintasMaster.data,
-      biblioteca_tecnica: bibliotecaTecnica.data,
-      biblioteca_componentes: bibliotecaComponentes.data,
-      tecnologias_impresion: tecnologiasImpresion.data,
-      proveedores: proveedores.data,
-      cotizaciones_inteligentes: cotizacionesInteligentes.data,
-      pedidos: pedidos.data
-    },
-    reglas: [
-      "Primero usar materiales, tintas, biblioteca tecnica, tecnologias y proveedores registrados.",
-      "No inventar precios.",
-      "No inventar materiales.",
-      "No inventar proveedores.",
-      "No inventar recetas constructivas.",
-      "Si un precio no esta registrado, responder pendiente de validacion.",
-      "Si existe precio_m2, precio_unitario, costo, precio, valor, tarifa o unidad registrada, usarlo para calcular.",
-      "Si hay datos suficientes, preparar cotizacion preliminar.",
-      "Para lonas, viniles o impresion por area: area = ancho x alto.",
-      "Para ojetes cada 50 cm: calcular sobre perimetro. Perimetro = (ancho + alto) x 2.",
-      "Cantidad de ojetes aproximada = perimetro / separacion.",
-      "Si hay precio por metro cuadrado y area, calcular subtotal.",
-      "Si hay precio unitario de componente, calcular subtotal por cantidad."
-    ]
-  };
+      return palabras.some((p) => nombre.includes(p) || categoria.includes(p));
+    })
+    .slice(0, 20);
 }
 
 function construirContextoMemoriaOperativa(memoriaOperativa = null) {
   if (!memoriaOperativa || typeof memoriaOperativa !== "object") return "";
 
   const fuentes = memoriaOperativa.fuentes || {};
+  const entrada = memoriaOperativa.entrada_usuario || "";
+
+  const materialesMaster = filtrarMaterialesRelevantes(
+    Array.isArray(fuentes.materiales_master_v2)
+      ? fuentes.materiales_master_v2
+      : [],
+    entrada
+  );
+
+  const materialesIA = filtrarMaterialesRelevantes(
+    Array.isArray(fuentes.materiales_ia_v2) ? fuentes.materiales_ia_v2 : [],
+    entrada
+  );
 
   const resumen = {
-    version: memoriaOperativa.version || "AI-08.1",
+    version: memoriaOperativa.version || "AI-09.1",
     unidad: memoriaOperativa.unidad || "ELANVISUAL",
-    entrada_usuario: memoriaOperativa.entrada_usuario || "",
+    entrada_usuario: entrada,
     estado_fuentes: memoriaOperativa.estado_fuentes || {},
     errores_fuentes: memoriaOperativa.errores_fuentes || {},
-    materiales_ia_v2: Array.isArray(fuentes.materiales_ia_v2)
-      ? fuentes.materiales_ia_v2.slice(0, 20)
-      : [],
+    fuente_principal_precios: "materiales_master_v2",
+    materiales_master_v2: materialesMaster,
+    materiales_ia_v2_auxiliar: materialesIA.slice(0, 10),
     tintas_master: Array.isArray(fuentes.tintas_master)
       ? fuentes.tintas_master.slice(0, 10)
       : [],
@@ -185,7 +90,7 @@ function construirContextoMemoriaOperativa(memoriaOperativa = null) {
       ? fuentes.biblioteca_tecnica.slice(0, 8)
       : [],
     biblioteca_componentes: Array.isArray(fuentes.biblioteca_componentes)
-      ? fuentes.biblioteca_componentes.slice(0, 15)
+      ? fuentes.biblioteca_componentes.slice(0, 20)
       : [],
     tecnologias_impresion: Array.isArray(fuentes.tecnologias_impresion)
       ? fuentes.tecnologias_impresion.slice(0, 8)
@@ -197,15 +102,23 @@ function construirContextoMemoriaOperativa(memoriaOperativa = null) {
   };
 
   return `
-CONTEXTO TECNICO OPERATIVO ELANVISUAL / AI-08.1:
+CONTEXTO TECNICO OPERATIVO ELANVISUAL / AI-09.1:
+
 Usa este contexto como memoria operativa antes de responder.
 No inventes materiales, precios, proveedores, tecnologías ni procesos.
 Si un dato no existe en este contexto, marcá: "pendiente de validación".
 
-REGLA CRÍTICA DE COTIZACIÓN:
-Si el usuario pide precio, presupuesto o cotización, calculá todo lo posible con los datos disponibles.
-Si existe precio_m2, precio_unitario, precio, costo, tarifa o valor en las fuentes, úsalo.
-Si no existe precio oficial, indicá pendiente de validación.
+REGLA CRÍTICA:
+La fuente principal de precios es materiales_master_v2.
+No uses materiales_ia_v2 para precios si materiales_master_v2 tiene datos.
+
+CAMPOS DE PRECIO DISPONIBLES:
+- precio_venta_1x: precio comercial base por m².
+- precio_venta_1_5x: precio comercial medio por m².
+- precio_venta_2x: precio comercial premium por m².
+- costo_m2_material: costo material por m².
+- costo_con_tinta: costo material + tinta por m².
+- tinta_m2: costo tinta por m² si existe.
 
 REGLAS DE CÁLCULO:
 - Área = ancho x alto.
@@ -214,16 +127,17 @@ REGLAS DE CÁLCULO:
 - Para lona 2x2 m: área = 4 m².
 - Para lona 2x2 m: perímetro = 8 ml.
 - Para ojete cada 50 cm: cantidad aproximada = 16 ojetes.
-- Si el usuario pide lona impresa, asumir impresión incluida.
-- Si el usuario pide instalado, incluir instalación solo si hay tarifa registrada.
+- Si el usuario pide lona impresa, usar material tipo lona banner y tecnología ecosolvente salvo mejor dato registrado.
+- Si hay precio_venta_1x y área, calcular subtotal comercial.
+- Si no hay precio de ojete registrado, indicarlo como pendiente de validación sin bloquear la cotización.
 
 FORMATO DE RESPUESTA PARA COTIZACIÓN:
 1. Cotización preliminar
 2. Medidas y cálculo
 3. Material / tecnología usada
 4. Despiece preliminar
-5. Subtotales si existen precios registrados
-6. Total preliminar si hay datos suficientes
+5. Subtotales con precios registrados
+6. Total preliminar
 7. Pendientes de validación
 8. Siguiente acción recomendada
 
@@ -299,7 +213,7 @@ export default async function handler(req, res) {
       service: "ELANKAV CORE AI",
       endpoint: "/api/elan-ai",
       status: "online",
-      version: "AI-08.1"
+      version: "AI-09.1"
     });
   }
 
@@ -324,7 +238,7 @@ export default async function handler(req, res) {
 
     const body = req.body || {};
 
-    const unidad = body.unidad || "ELANKAV";
+    const unidad = body.unidad || "ELANVISUAL";
     const contexto = body.contexto || "";
     const proyecto = body.proyecto || null;
     const usuario = body.usuario || null;
@@ -344,7 +258,8 @@ export default async function handler(req, res) {
 
     const memoriaOperativa =
       memoriaOperativaBase ||
-      (await cargarMemoriaOperativaDesdeSupabase({
+      (await obtenerMemoriaOperativa({
+        supabase,
         entradaUsuario: textoUsuario,
         unidad
       }));
@@ -378,7 +293,10 @@ export default async function handler(req, res) {
       "'sin instalación' = instalación no incluida.",
       "'fachada existente' = estructura existente.",
       "Usa la memoria operativa de Supabase antes de responder.",
-      "Si existe precio_m2, precio_unitario, precio, costo, tarifa o valor en memoria operativa, úsalo para calcular.",
+      "La fuente principal de precios es materiales_master_v2.",
+      "materiales_ia_v2 es solo auxiliar de búsqueda, no fuente principal de precios.",
+      "Si existe precio_venta_1x, precio_venta_1_5x, precio_venta_2x, costo_m2_material o costo_con_tinta en memoria operativa, úsalo.",
+      "Para cotización comercial preliminar usa preferentemente precio_venta_1x.",
       "Para lonas, viniles o impresión por área: área = ancho x alto.",
       "Para ojetes cada 50 cm: calcular sobre perímetro. Perímetro = (ancho + alto) x 2.",
       "Cantidad de ojetes aproximada = perímetro / separación.",
@@ -413,6 +331,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
+      version: "AI-09.1",
       respuesta: response.output_text || "",
       clientes,
       debug_estado_fuentes: memoriaOperativa?.estado_fuentes || null,
@@ -423,6 +342,7 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       ok: false,
+      endpoint: "/api/elan-ai",
       error: error?.message || "Error conectando ELANKAV CORE AI"
     });
   }

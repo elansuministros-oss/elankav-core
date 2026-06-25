@@ -1,84 +1,49 @@
-﻿import { createClient } from "@supabase/supabase-js";
+﻿import {
+  crearClienteSupabase,
+  obtenerMemoriaOperativa
+} from "../lib/memoria-operativa.js";
 
-const supabase =
-  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      )
-    : null;
-
-function compactarRegistro(registro = {}) {
-  const salida = {};
-
-  for (const [key, value] of Object.entries(registro || {})) {
-    if (value === null || value === undefined || value === "") continue;
-
-    salida[key] = typeof value === "string" ? value.slice(0, 240) : value;
-  }
-
-  return salida;
-}
-
-function compactarArray(valor) {
-  return Array.isArray(valor) ? valor.map(compactarRegistro) : [];
-}
+const supabase = crearClienteSupabase();
 
 export default async function handler(req, res) {
   try {
-    if (!supabase) {
-      return res.status(500).json({
-        ok: false,
-        error: "Supabase no configurado"
-      });
-    }
+    const memoria = await obtenerMemoriaOperativa({
+      supabase,
+      entradaUsuario: "",
+      unidad: "ELANVISUAL"
+    });
 
-    const { data, error } = await supabase.rpc(
-      "elankav_memoria_operativa"
-    );
-
-    if (error) {
-      return res.status(500).json({
-        ok: false,
-        endpoint: "/api/elan-memoria",
-        metodo: "rpc_sin_argumentos",
-        rpc: "elankav_memoria_operativa",
-        supabase_url: process.env.SUPABASE_URL,
-        error: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      });
-    }
-
-    const memoria = data || {};
-
-    const resultados = {
-      materiales_ia_v2: compactarArray(memoria.materiales_ia_v2).slice(0, 5),
-      materiales_master_v2: compactarArray(memoria.materiales_master_v2).slice(0, 5),
-      tintas_master: compactarArray(memoria.tintas_master).slice(0, 5),
-      biblioteca_tecnica: compactarArray(memoria.biblioteca_tecnica).slice(0, 5),
-      biblioteca_componentes: compactarArray(memoria.biblioteca_componentes).slice(0, 5),
-      tecnologias_impresion: compactarArray(memoria.tecnologias_impresion).slice(0, 5),
-      proveedores: compactarArray(memoria.proveedores).slice(0, 5)
-    };
+    const fuentes = memoria.fuentes || {};
 
     const conteos = {
-      materiales_ia_v2: compactarArray(memoria.materiales_ia_v2).length,
-      materiales_master_v2: compactarArray(memoria.materiales_master_v2).length,
-      tintas_master: compactarArray(memoria.tintas_master).length,
-      biblioteca_tecnica: compactarArray(memoria.biblioteca_tecnica).length,
-      biblioteca_componentes: compactarArray(memoria.biblioteca_componentes).length,
-      tecnologias_impresion: compactarArray(memoria.tecnologias_impresion).length,
-      proveedores: compactarArray(memoria.proveedores).length
+      materiales_ia_v2: fuentes.materiales_ia_v2?.length || 0,
+      materiales_master_v2: fuentes.materiales_master_v2?.length || 0,
+      tintas_master: fuentes.tintas_master?.length || 0,
+      biblioteca_tecnica: fuentes.biblioteca_tecnica?.length || 0,
+      biblioteca_componentes: fuentes.biblioteca_componentes?.length || 0,
+      tecnologias_impresion: fuentes.tecnologias_impresion?.length || 0,
+      proveedores: fuentes.proveedores?.length || 0
     };
 
-    return res.status(200).json({
-      ok: true,
+    const resultados = {
+      materiales_ia_v2: fuentes.materiales_ia_v2?.slice(0, 5) || [],
+      materiales_master_v2: fuentes.materiales_master_v2?.slice(0, 5) || [],
+      tintas_master: fuentes.tintas_master?.slice(0, 5) || [],
+      biblioteca_tecnica: fuentes.biblioteca_tecnica?.slice(0, 5) || [],
+      biblioteca_componentes: fuentes.biblioteca_componentes?.slice(0, 5) || [],
+      tecnologias_impresion: fuentes.tecnologias_impresion?.slice(0, 5) || [],
+      proveedores: fuentes.proveedores?.slice(0, 5) || []
+    };
+
+    return res.status(memoria.estado_fuentes?.supabase === "error" ? 500 : 200).json({
+      ok: memoria.estado_fuentes?.supabase !== "error",
       endpoint: "/api/elan-memoria",
-      metodo: "rpc_sin_argumentos",
+      version: memoria.version,
+      metodo: "memoria_operativa_unificada",
       rpc: "elankav_memoria_operativa",
       supabase_url: process.env.SUPABASE_URL,
+      estado_fuentes: memoria.estado_fuentes,
+      errores_fuentes: memoria.errores_fuentes,
       conteos,
       resultados
     });
