@@ -116,9 +116,9 @@ CAMPOS DE PRECIO DISPONIBLES:
 - precio_venta_1x: precio comercial base por m².
 - precio_venta_1_5x: precio comercial medio por m².
 - precio_venta_2x: precio comercial premium por m².
-- costo_m2_material: costo material por m².
-- costo_con_tinta: costo material + tinta por m².
-- tinta_m2: costo tinta por m² si existe.
+- costo_m2_material, costo_con_tinta y tinta_m2 son datos internos.
+- Estos campos pueden usarse solo para cálculo interno.
+- Nunca deben mostrarse en la respuesta visible.
 
 REGLAS DE CÁLCULO:
 - Área = ancho x alto.
@@ -131,17 +131,28 @@ REGLAS DE CÁLCULO:
 - Si hay precio_venta_1x y área, calcular subtotal comercial.
 - Si no hay precio de ojete registrado, indicarlo como pendiente de validación sin bloquear la cotización.
 
-FORMATO DE RESPUESTA PARA COTIZACIÓN:
-1. Cotización preliminar
-2. Medidas y cálculo
-3. Material / tecnología usada
-4. Despiece preliminar
-5. Subtotales con precios registrados
-6. Total preliminar
-7. Pendientes de validación
-8. Siguiente acción recomendada
+FORMATO DE RESPUESTA PARA COTIZACIÓN COMERCIAL:
+1. Producto o servicio detectado.
+2. Medida detectada, si existe.
+3. Cantidad detectada, si existe.
+4. Precio final estimado o indicar pendiente de medida.
+5. Observación comercial breve.
+6. Una sola pregunta si falta un dato indispensable.
 
-${JSON.stringify(resumen, null, 2)}
+PROHIBIDO EN RESPUESTA VISIBLE AL CLIENTE:
+- No mostrar material interno.
+- No mostrar tinta.
+- No mostrar precio por m² interno.
+- No mostrar fórmulas.
+- No mostrar costos.
+- No mostrar margen.
+- No mostrar despiece.
+- No mostrar tecnología de impresión salvo que el usuario la pida explícitamente.
+- No mostrar listas técnicas largas.
+
+Podés usar la memoria operativa para calcular internamente, pero la respuesta visible debe ser comercial, breve y lista para cliente.
+
+
 `;
 }
 
@@ -295,15 +306,19 @@ export default async function handler(req, res) {
       "Usa la memoria operativa de Supabase antes de responder.",
       "La fuente principal de precios es materiales_master_v2.",
       "materiales_ia_v2 es solo auxiliar de búsqueda, no fuente principal de precios.",
-      "Si existe precio_venta_1x, precio_venta_1_5x, precio_venta_2x, costo_m2_material o costo_con_tinta en memoria operativa, úsalo.",
+      "Si existe precio_venta_1x, precio_venta_1_5x o precio_venta_2x en memoria operativa, úsalo para estimar precio comercial final sin mostrar el precio por m² ni el cálculo interno.",
       "Para cotización comercial preliminar usa preferentemente precio_venta_1x.",
-      "Para lonas, viniles o impresión por área: área = ancho x alto.",
+      "Para lonas, viniles o impresión por área, calcula internamente el área, pero no muestres la fórmula ni el desglose.",
       "Para ojetes cada 50 cm: calcular sobre perímetro. Perímetro = (ancho + alto) x 2.",
       "Cantidad de ojetes aproximada = perímetro / separación.",
-      "Si hay precio por m² y área, calcular subtotal.",
-      "Si hay precio unitario de componente, calcular subtotal por cantidad.",
+      "Si hay precio comercial por área y medidas suficientes, entrega solo el precio final estimado.",
+      "Si hay precio comercial por unidad y cantidad suficiente, entrega solo el precio final estimado.",
       "Si no existe un precio oficial disponible, genera una propuesta preliminar estructurada sin inventar costos.",
       "Responde de forma breve, comercial, directa y útil para vendedores.",
+      "Cuando el usuario pida precio, cotización, presupuesto, valor o cuánto cuesta, respondé en MODO COMERCIAL DIRECTO.",
+      "En MODO COMERCIAL DIRECTO no revelés costos internos, materiales internos, tintas, fórmulas, márgenes, despiece ni cálculos por m².",
+      "El resultado visible debe parecer una respuesta lista para enviar a cliente.",
+      "Formato preferido: Para [producto/servicio] de [medida], precio estimado: C$ ____. Incluye [alcance comercial breve]. Para cerrar precio final necesito confirmar [dato faltante].",
       `Unidad: ${unidad}`,
       `Modo: ${modo}`,
       proyecto ? `Proyecto:\n${JSON.stringify(proyecto)}` : "",
@@ -347,3 +362,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
+
