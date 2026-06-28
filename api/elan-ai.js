@@ -3,6 +3,10 @@ import {
   crearClienteSupabase,
   obtenerMemoriaOperativa
 } from "../lib/memoria-operativa.js";
+import {
+  obtenerPerfilProducto,
+  obtenerModeloBoton
+} from "../lib/aiProductProfiles.js";
 
 const supabase = crearClienteSupabase();
 
@@ -22,138 +26,13 @@ function setCors(req, res) {
 
   res.setHeader("Access-Control-Allow-Origin", allowOrigin);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With"
-  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Vary", "Origin");
 }
 
-function filtrarMaterialesRelevantes(materiales = [], texto = "") {
-  const t = String(texto || "").toLowerCase();
-
-  const palabras = [];
-
-  if (t.includes("lona") || t.includes("banner")) palabras.push("lona", "banner");
-  if (t.includes("traslucida") || t.includes("traslúcida")) palabras.push("traslucida", "traslúcida");
-  if (t.includes("mesh")) palabras.push("mesh");
-  if (t.includes("vinil")) palabras.push("vinil");
-  if (t.includes("micro")) palabras.push("microperforado");
-  if (t.includes("pvc")) palabras.push("pvc");
-  if (t.includes("acrilico") || t.includes("acrílico")) palabras.push("acrilico", "acrílico");
-  if (t.includes("acm")) palabras.push("acm");
-
-  if (!palabras.length) return materiales.slice(0, 20);
-
-  return materiales
-    .filter((m) => {
-      const nombre = String(m.nombre || "").toLowerCase();
-      const categoria = String(m.categoria || "").toLowerCase();
-
-      return palabras.some((p) => nombre.includes(p) || categoria.includes(p));
-    })
-    .slice(0, 20);
-}
-
-function construirContextoMemoriaOperativa(memoriaOperativa = null) {
-  if (!memoriaOperativa || typeof memoriaOperativa !== "object") return "";
-
-  const fuentes = memoriaOperativa.fuentes || {};
-  const entrada = memoriaOperativa.entrada_usuario || "";
-
-  const materialesMaster = filtrarMaterialesRelevantes(
-    Array.isArray(fuentes.materiales_master_v2)
-      ? fuentes.materiales_master_v2
-      : [],
-    entrada
-  );
-
-  const materialesIA = filtrarMaterialesRelevantes(
-    Array.isArray(fuentes.materiales_ia_v2) ? fuentes.materiales_ia_v2 : [],
-    entrada
-  );
-
-  const resumen = {
-    version: memoriaOperativa.version || "AI-09.1",
-    unidad: memoriaOperativa.unidad || "ELANVISUAL",
-    entrada_usuario: entrada,
-    estado_fuentes: memoriaOperativa.estado_fuentes || {},
-    errores_fuentes: memoriaOperativa.errores_fuentes || {},
-    fuente_principal_precios: "materiales_master_v2",
-    materiales_master_v2: materialesMaster,
-    materiales_ia_v2_auxiliar: materialesIA.slice(0, 10),
-    tintas_master: Array.isArray(fuentes.tintas_master)
-      ? fuentes.tintas_master.slice(0, 10)
-      : [],
-    biblioteca_tecnica: Array.isArray(fuentes.biblioteca_tecnica)
-      ? fuentes.biblioteca_tecnica.slice(0, 8)
-      : [],
-    biblioteca_componentes: Array.isArray(fuentes.biblioteca_componentes)
-      ? fuentes.biblioteca_componentes.slice(0, 20)
-      : [],
-    tecnologias_impresion: Array.isArray(fuentes.tecnologias_impresion)
-      ? fuentes.tecnologias_impresion.slice(0, 8)
-      : [],
-    proveedores: Array.isArray(fuentes.proveedores)
-      ? fuentes.proveedores.slice(0, 8)
-      : [],
-    reglas: memoriaOperativa.reglas || []
-  };
-
-  return `
-CONTEXTO TECNICO OPERATIVO ELANVISUAL / AI-09.1:
-
-Usa este contexto como memoria operativa antes de responder.
-No inventes materiales, precios, proveedores, tecnologías ni procesos.
-Si un dato no existe en este contexto, marcá: "pendiente de validación".
-
-REGLA CRÍTICA:
-La fuente principal de precios es materiales_master_v2.
-No uses materiales_ia_v2 para precios si materiales_master_v2 tiene datos.
-
-CAMPOS DE PRECIO DISPONIBLES:
-- precio_venta_1x: precio comercial base por m².
-- precio_venta_1_5x: precio comercial medio por m².
-- precio_venta_2x: precio comercial premium por m².
-- costo_m2_material, costo_con_tinta y tinta_m2 son datos internos.
-- Estos campos pueden usarse solo para cálculo interno.
-- Nunca deben mostrarse en la respuesta visible.
-
-REGLAS DE CÁLCULO:
-- Área = ancho x alto.
-- Perímetro = (ancho + alto) x 2.
-- Ojete cada 50 cm = perímetro / 0.50.
-- Para lona 2x2 m: área = 4 m².
-- Para lona 2x2 m: perímetro = 8 ml.
-- Para ojete cada 50 cm: cantidad aproximada = 16 ojetes.
-- Si el usuario pide lona impresa, usar material tipo lona banner y tecnología ecosolvente salvo mejor dato registrado.
-- Si hay precio_venta_1x y área, calcular subtotal comercial.
-- Si no hay precio de ojete registrado, indicarlo como pendiente de validación sin bloquear la cotización.
-
-FORMATO DE RESPUESTA PARA COTIZACIÓN COMERCIAL:
-1. Producto o servicio detectado.
-2. Medida detectada, si existe.
-3. Cantidad detectada, si existe.
-4. Precio final estimado o indicar pendiente de medida.
-5. Observación comercial breve.
-6. Una sola pregunta si falta un dato indispensable.
-
-PROHIBIDO EN RESPUESTA VISIBLE AL CLIENTE:
-- No mostrar material interno.
-- No mostrar tinta.
-- No mostrar precio por m² interno.
-- No mostrar fórmulas.
-- No mostrar costos.
-- No mostrar margen.
-- No mostrar despiece.
-- No mostrar tecnología de impresión salvo que el usuario la pida explícitamente.
-- No mostrar listas técnicas largas.
-
-Podés usar la memoria operativa para calcular internamente, pero la respuesta visible debe ser comercial, breve y lista para cliente.
-
-
-`;
+function normalizarTelefono(valor = "") {
+  return String(valor || "").replace(/[^\d+]/g, "").trim();
 }
 
 function normalizarMensajes(body = {}) {
@@ -167,55 +46,257 @@ function normalizarMensajes(body = {}) {
   }
 
   if (body.mensaje) {
-    return [
-      {
-        role: "user",
-        content: String(body.mensaje)
-      }
-    ];
+    return [{ role: "user", content: String(body.mensaje) }];
   }
 
   return [];
 }
 
 function ultimoTextoUsuario(mensajes = []) {
-  const ultimos = [...mensajes].reverse();
-
-  return String(
-    ultimos.find((m) => m.role === "user")?.content || ""
-  ).trim();
+  return String([...mensajes].reverse().find((m) => m.role === "user")?.content || "").trim();
 }
 
 function contextoClientes(clientes = []) {
-  if (!clientes.length) {
-    return "Clientes CRM encontrados: ninguno.";
-  }
-
+  if (!clientes.length) return "Clientes CRM encontrados: ninguno.";
   return [
     "Clientes CRM encontrados:",
     ...clientes.map((c, i) => {
-      const nombre =
-        c.empresa ||
-        c.cliente ||
-        c.nombre ||
-        c.contacto ||
-        "Sin nombre";
-
-      return `${i + 1}. ${nombre} | ${
-        c.whatsapp || c.telefono || ""
-      } | ${c.ciudad || ""}`;
+      const nombre = c.empresa || c.cliente || c.nombre || c.contacto || "Sin nombre";
+      return `${i + 1}. ${nombre} | ${c.whatsapp || c.telefono || ""} | ${c.ciudad || ""}`;
     })
   ].join("\n");
+}
+
+function filtrarMaterialesRelevantes(materiales = [], texto = "") {
+  const t = String(texto || "").toLowerCase();
+  const palabras = [];
+
+  if (t.includes("lona") || t.includes("banner")) palabras.push("lona", "banner");
+  if (t.includes("vinil")) palabras.push("vinil");
+  if (t.includes("pvc")) palabras.push("pvc");
+  if (t.includes("acrilico") || t.includes("acrílico")) palabras.push("acrilico", "acrílico");
+  if (t.includes("acm")) palabras.push("acm");
+
+  if (!palabras.length) return materiales.slice(0, 20);
+
+  return materiales
+    .filter((m) => {
+      const nombre = String(m.nombre || "").toLowerCase();
+      const categoria = String(m.categoria || "").toLowerCase();
+      return palabras.some((p) => nombre.includes(p) || categoria.includes(p));
+    })
+    .slice(0, 20);
+}
+
+function construirContextoMemoriaOperativa(memoriaOperativa = null) {
+  if (!memoriaOperativa || typeof memoriaOperativa !== "object") return "";
+
+  const fuentes = memoriaOperativa.fuentes || {};
+  const entrada = memoriaOperativa.entrada_usuario || "";
+
+  const materialesMaster = filtrarMaterialesRelevantes(
+    Array.isArray(fuentes.materiales_master_v2) ? fuentes.materiales_master_v2 : [],
+    entrada
+  );
+
+  return `
+CONTEXTO TECNICO OPERATIVO ELANVISUAL:
+- Fuente principal de precios: materiales_master_v2.
+- No inventar precios, materiales, proveedores ni procesos.
+- No mostrar costos internos, fórmulas, tintas, márgenes ni despiece al cliente.
+- Si falta dato crítico, hacer máximo una pregunta.
+
+MATERIALES RELEVANTES:
+${JSON.stringify(materialesMaster, null, 2)}
+`;
+}
+
+async function contarUsosRender({ whatsapp }) {
+  if (!supabase) return 0;
+
+  const { count, error } = await supabase
+    .from("elan_ai_renders")
+    .select("id", { count: "exact", head: true })
+    .eq("whatsapp", whatsapp)
+    .eq("producto", "botones");
+
+  if (error) {
+    console.error("Error contando usos:", error);
+    return 0;
+  }
+
+  return count || 0;
+}
+
+function construirPromptRenderBotones({ producto, modelo, idea, whatsapp, logoUrl, lugarUrl }) {
+  const perfil = obtenerPerfilProducto(producto || "botones");
+  const modeloInfo = obtenerModeloBoton(modelo);
+
+  if (!perfil) {
+    throw new Error("Perfil de producto no soportado");
+  }
+
+  return `
+Crear un render comercial realista para ELANVISUAL.
+
+Especialista: ${perfil.especialista}
+Producto: ${perfil.producto}
+Modelo seleccionado: ${modeloInfo.nombre}
+Referencia visual interna: ${modeloInfo.referencia}
+Precio comercial del modelo: ${modeloInfo.precio}
+Medida base: ${modeloInfo.medida_base}
+Descripción técnica: ${modeloInfo.descripcion}
+
+Idea del cliente:
+${idea || "El cliente desea una propuesta profesional para su marca."}
+
+WhatsApp del cliente:
+${whatsapp}
+
+Logo enviado:
+${logoUrl ? `Sí. Referencia: ${logoUrl}` : "No confirmado."}
+
+Foto del lugar:
+${lugarUrl ? `Sí. Referencia: ${lugarUrl}` : "No enviada."}
+
+Reglas obligatorias:
+${perfil.reglas.map((r) => `- ${r}`).join("\n")}
+
+Dirección visual:
+- Render cuadrado 1024x1024.
+- Producto circular real, proporción 1:1.
+- Botón publicitario premium montado en pared limpia o contexto comercial sobrio.
+- Acabados realistas: acrílico, impresión, brillo controlado y volumen físico.
+- Iluminación profesional sin exagerar.
+- Nada de rótulos rectangulares.
+- Nada de productos ajenos a botones.
+- No agregar textos inventados fuera del logo o idea de marca.
+- Resultado vendible, elegante, moderno y fabricable.
+`;
+}
+
+async function manejarRenderBotones(body = {}) {
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      status: 500,
+      payload: { ok: false, error: "OPENAI_API_KEY no configurada en CORE" }
+    };
+  }
+
+  if (!supabase) {
+    return {
+      status: 500,
+      payload: { ok: false, error: "Supabase no configurado en CORE" }
+    };
+  }
+
+  const whatsapp = normalizarTelefono(body.whatsapp || body.WhatsApp || body.telefono || "");
+  const producto = String(body.producto || "botones").trim();
+  const modelo = String(body.modelo || "boton-transparente").trim();
+  const idea = String(body.idea || body.prompt || body.mensaje || "").trim();
+  const logoUrl = String(body.logo_url || body.logo || "").trim();
+  const lugarUrl = String(body.lugar_url || body.foto_lugar || body.foto || "").trim();
+
+  if (!whatsapp) {
+    return {
+      status: 400,
+      payload: { ok: false, error: "Falta WhatsApp" }
+    };
+  }
+
+  const usosActuales = await contarUsosRender({ whatsapp });
+
+  if (usosActuales >= 3) {
+    return {
+      status: 200,
+      payload: {
+        ok: false,
+        limite_alcanzado: true,
+        usos_restantes: 0,
+        mensaje: "No es posible generar más propuestas automáticas. Nuestro equipo realizará la digitalización profesional de su proyecto."
+      }
+    };
+  }
+
+  const promptUtilizado = construirPromptRenderBotones({
+    producto,
+    modelo,
+    idea,
+    whatsapp,
+    logoUrl,
+    lugarUrl
+  });
+
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const response = await client.responses.create({
+    model: process.env.OPENAI_RENDER_MODEL || "gpt-5.5",
+    input: [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: promptUtilizado },
+          ...(logoUrl ? [{ type: "input_image", image_url: logoUrl }] : []),
+          ...(lugarUrl ? [{ type: "input_image", image_url: lugarUrl }] : [])
+        ]
+      }
+    ],
+    tools: [{ type: "image_generation" }]
+  });
+
+  const imagenBase64 = response.output
+    ?.filter((item) => item.type === "image_generation_call")
+    ?.map((item) => item.result)
+    ?.find(Boolean);
+
+  if (!imagenBase64) {
+    throw new Error("OpenAI no devolvió imagen generada");
+  }
+
+  const imagen = `data:image/png;base64,${imagenBase64}`;
+  const usosNumero = usosActuales + 1;
+
+  const { data: insertado, error: insertError } = await supabase
+    .from("elan_ai_renders")
+    .insert({
+      unidad: "ELANVISUAL",
+      producto: "botones",
+      modelo,
+      whatsapp,
+      idea,
+      prompt_utilizado: promptUtilizado,
+      logo_url: logoUrl || null,
+      lugar_url: lugarUrl || null,
+      render_url: imagen,
+      estado: "generado",
+      usos_numero: usosNumero
+    })
+    .select("id")
+    .single();
+
+  if (insertError) {
+    console.error("Error guardando render:", insertError);
+    throw new Error(`No se pudo guardar render en Supabase: ${insertError.message}`);
+  }
+
+  return {
+    status: 200,
+    payload: {
+      ok: true,
+      tipo: "render-botones",
+      imagen,
+      prompt_utilizado: promptUtilizado,
+      usos_restantes: Math.max(0, 3 - usosNumero),
+      id_lead: insertado?.id || null
+    }
+  };
 }
 
 export default async function handler(req, res) {
   setCors(req, res);
 
   if (req.method === "OPTIONS") {
-    return res.status(200).json({
-      ok: true,
-      message: "CORS OK"
-    });
+    return res.status(200).json({ ok: true, message: "CORS OK" });
   }
 
   if (req.method === "GET") {
@@ -224,51 +305,44 @@ export default async function handler(req, res) {
       service: "ELANKAV CORE AI",
       endpoint: "/api/elan-ai",
       status: "online",
-      version: "AI-09.1"
+      version: "AI-10-DESIGNER",
+      soporta: ["chat", "render-botones"]
     });
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({
-      ok: false,
-      error: "Método no permitido"
-    });
+    return res.status(405).json({ ok: false, error: "Método no permitido" });
   }
 
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({
-        ok: false,
-        error: "OPENAI_API_KEY no configurada"
-      });
+    const body = req.body || {};
+    const tipo = String(body.tipo || "").trim();
+
+    if (tipo === "render-botones") {
+      const resultado = await manejarRenderBotones(body);
+      return res.status(resultado.status).json(resultado.payload);
     }
 
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ ok: false, error: "OPENAI_API_KEY no configurada" });
+    }
 
-    const body = req.body || {};
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     const unidad = body.unidad || "ELANVISUAL";
     const contexto = body.contexto || "";
     const proyecto = body.proyecto || null;
     const usuario = body.usuario || null;
     const modo = body.modo || "chat";
-
     const mensajes = normalizarMensajes(body);
-    const memoriaOperativaBase = body.memoria_operativa || null;
 
     if (!mensajes.length) {
-      return res.status(400).json({
-        ok: false,
-        error: "Falta mensaje"
-      });
+      return res.status(400).json({ ok: false, error: "Falta mensaje" });
     }
 
     const textoUsuario = ultimoTextoUsuario(mensajes);
-
     const memoriaOperativa =
-      memoriaOperativaBase ||
+      body.memoria_operativa ||
       (await obtenerMemoriaOperativa({
         supabase,
         entradaUsuario: textoUsuario,
@@ -281,72 +355,31 @@ export default async function handler(req, res) {
       "Eres ELANKAV CORE AI.",
       "Para ELANVISUAL trabajas como asesor comercial senior y técnico de rotulación.",
       "Tu prioridad es responder, resolver y cotizar, no entrevistar.",
-      "Extrae automáticamente toda la información posible del mensaje del usuario.",
-      "No hagas preguntas sobre información que ya fue proporcionada.",
-      "Máximo una pregunta por respuesta.",
-      "Si identificas producto y medidas debes avanzar inmediatamente hacia una cotización preliminar.",
-      "Si el usuario pide cotización, presupuesto o precio, activa automáticamente MODO COTIZADOR.",
-      "Primero cotiza. Después completa detalles si son necesarios.",
-      "No bloquees una cotización por falta de CRM.",
-      "No obligues a registrar clientes para cotizar.",
-      "No preguntes si desea PDF antes de generar la cotización.",
-      "No preguntes por IVA salvo que sea necesario.",
-      "No preguntes por instalación si el usuario escribió instalado.",
-      "No preguntes por impresión si el usuario escribió full color.",
-      "No preguntes por laminado si el usuario escribió sobre laminado.",
-      "Solo pregunta cuando falten datos imposibles de deducir.",
-      "Interpreta automáticamente:",
-      "'full color' = impresión full color.",
-      "'vinil adhesivo impreso' = impresión incluida.",
-      "'lona impresa' = lona con impresión incluida.",
-      "'sobre laminado' = laminado incluido.",
-      "'instalado' = instalación incluida.",
-      "'sin instalación' = instalación no incluida.",
-      "'fachada existente' = estructura existente.",
+      "No inventes materiales, precios, proveedores ni tecnologías.",
       "Usa la memoria operativa de Supabase antes de responder.",
-      "La fuente principal de precios es materiales_master_v2.",
-      "materiales_ia_v2 es solo auxiliar de búsqueda, no fuente principal de precios.",
-      "Si existe precio_venta_1x, precio_venta_1_5x o precio_venta_2x en memoria operativa, úsalo para estimar precio comercial final sin mostrar el precio por m² ni el cálculo interno.",
-      "Para cotización comercial preliminar usa preferentemente precio_venta_1x.",
-      "Para lonas, viniles o impresión por área, calcula internamente el área, pero no muestres la fórmula ni el desglose.",
-      "Para ojetes cada 50 cm: calcular sobre perímetro. Perímetro = (ancho + alto) x 2.",
-      "Cantidad de ojetes aproximada = perímetro / separación.",
-      "Si hay precio comercial por área y medidas suficientes, entrega solo el precio final estimado.",
-      "Si hay precio comercial por unidad y cantidad suficiente, entrega solo el precio final estimado.",
-      "Si no existe un precio oficial disponible, genera una propuesta preliminar estructurada sin inventar costos.",
-      "Responde de forma breve, comercial, directa y útil para vendedores.",
-      "Cuando el usuario pida precio, cotización, presupuesto, valor o cuánto cuesta, respondé en MODO COMERCIAL DIRECTO.",
-      "En MODO COMERCIAL DIRECTO no revelés costos internos, materiales internos, tintas, fórmulas, márgenes, despiece ni cálculos por m².",
-      "El resultado visible debe parecer una respuesta lista para enviar a cliente.",
-      "Formato preferido: Para [producto/servicio] de [medida], precio estimado: C$ ____. Incluye [alcance comercial breve]. Para cerrar precio final necesito confirmar [dato faltante].",
+      "Máximo una pregunta por respuesta.",
+      "No reveles costos internos, fórmulas, márgenes, tintas ni despieces.",
+      "Responde breve, comercial, directo y útil.",
       `Unidad: ${unidad}`,
       `Modo: ${modo}`,
       proyecto ? `Proyecto:\n${JSON.stringify(proyecto)}` : "",
       usuario ? `Usuario:\n${JSON.stringify(usuario)}` : "",
       contexto ? `Contexto:\n${contexto}` : "",
       contextoClientes(clientes)
-    ]
-      .filter(Boolean)
-      .join("\n");
+    ].filter(Boolean).join("\n");
 
     const response = await client.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
       input: [
-        {
-          role: "system",
-          content: system
-        },
-        {
-          role: "developer",
-          content: construirContextoMemoriaOperativa(memoriaOperativa)
-        },
+        { role: "system", content: system },
+        { role: "developer", content: construirContextoMemoriaOperativa(memoriaOperativa) },
         ...mensajes
       ]
     });
 
     return res.status(200).json({
       ok: true,
-      version: "AI-09.1",
+      version: "AI-10-DESIGNER",
       respuesta: response.output_text || "",
       clientes,
       debug_estado_fuentes: memoriaOperativa?.estado_fuentes || null,
@@ -362,5 +395,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
-
