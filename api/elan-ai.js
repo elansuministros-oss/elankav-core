@@ -276,7 +276,6 @@ async function manejarRenderBotones(body = {}) {
 
   if (insertError) {
     console.error("Error guardando render:", insertError);
-    throw new Error(`No se pudo guardar render en Supabase: ${insertError.message}`);
   }
 
   return {
@@ -287,7 +286,9 @@ async function manejarRenderBotones(body = {}) {
       imagen,
       prompt_utilizado: promptUtilizado,
       usos_restantes: Math.max(0, 3 - usosNumero),
-      id_lead: insertado?.id || null
+      id_lead: insertado?.id || null,
+      guardado_supabase: !insertError,
+      error_supabase: insertError?.message || null
     }
   };
 }
@@ -395,3 +396,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
