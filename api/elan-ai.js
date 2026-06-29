@@ -115,8 +115,8 @@ async function contarUsosRender({ whatsapp }) {
   return 0;
 }
 
-function construirOrdenTecnicaRenderBotones({ producto, modelo, idea, whatsapp, logoUrl, lugarUrl }) {
-  const perfil = obtenerPerfilProducto(producto || "botones");
+function construirOrdenTecnicaRenderBotones({ producto, modelo, idea, whatsapp }) {
+const perfil = obtenerPerfilProducto(producto || "botones");
   const modeloInfo = obtenerModeloBoton(modelo);
 
   if (!perfil) {
@@ -167,9 +167,7 @@ function construirOrdenTecnicaRenderBotones({ producto, modelo, idea, whatsapp, 
     "Preparar propuesta para envío por WhatsApp al cliente."
   ];
 
-  const observaciones = [
-    logoUrl ? `Logo o referencia recibida: ${logoUrl}` : "No se recibió logo confirmado.",
-    lugarUrl ? `Foto del lugar recibida: ${lugarUrl}` : "No se recibió foto del lugar.",
+    const observaciones = [
     idea ? `Idea del cliente: ${idea}` : "El cliente solicita una propuesta profesional personalizada.",
     `WhatsApp del cliente: ${whatsapp}`
   ];
@@ -222,13 +220,11 @@ const lugarUrl = String(body.lugar_url || body.foto_lugar || body.foto || "").tr
     };
   }
 
-  const ordenTecnica = construirOrdenTecnicaRenderBotones({
+    const ordenTecnica = construirOrdenTecnicaRenderBotones({
     producto,
     modelo,
     idea,
-    whatsapp,
-    logoUrl,
-    lugarUrl
+    whatsapp
   });
 
   const solicitud = {
