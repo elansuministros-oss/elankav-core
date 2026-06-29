@@ -112,23 +112,10 @@ ${JSON.stringify(materialesMaster, null, 2)}
 }
 
 async function contarUsosRender({ whatsapp }) {
-  if (!supabase) return 0;
-
-  const { count, error } = await supabase
-    .from("elan_ai_renders")
-    .select("id", { count: "exact", head: true })
-    .eq("whatsapp", whatsapp)
-    .eq("producto", "botones");
-
-  if (error) {
-    console.error("Error contando usos:", error);
-    return 0;
-  }
-
-  return count || 0;
+  return 0;
 }
 
-function construirPromptRenderBotones({ producto, modelo, idea, whatsapp, logoUrl, lugarUrl }) {
+function construirOrdenTecnicaRenderBotones({ producto, modelo, idea, whatsapp, logoUrl, lugarUrl }) {
   const perfil = obtenerPerfilProducto(producto || "botones");
   const modeloInfo = obtenerModeloBoton(modelo);
 
@@ -136,125 +123,83 @@ function construirPromptRenderBotones({ producto, modelo, idea, whatsapp, logoUr
     throw new Error("Perfil de producto no soportado");
   }
 
-  return `
-Crear un render comercial realista para ELANVISUAL.
+  const analisisGrafico = [
+    "Analizar el logo o referencia enviada por el cliente.",
+    "Respetar nombre, colores dominantes, jerarquía visual y estilo gráfico original.",
+    "Adaptar la composición al formato circular sin deformar la identidad.",
+    "Mejorar limpieza, márgenes, alineación, legibilidad y balance visual."
+  ];
 
-Especialista: ${perfil.especialista}
-Producto: ${perfil.producto}
-Modelo seleccionado: ${modeloInfo.nombre}
-Referencia visual interna: ${modeloInfo.referencia}
-Precio comercial del modelo: ${modeloInfo.precio}
-Medida base: ${modeloInfo.medida_base}
-Descripción técnica: ${modeloInfo.descripcion}
+  const materialesRecomendados = [
+    "Acrílico transparente o acrílico lechoso según modelo seleccionado.",
+    "Vinil impreso de alta resolución, vinil frost o impresión UV según necesidad gráfica.",
+    "PVC, acrílico de color o piezas de relieve cortadas en láser cuando aplique.",
+    "Separadores metálicos, capatones y sistema de fijación oculto o decorativo."
+  ];
 
-Idea del cliente:
-${idea || "El cliente desea una propuesta profesional para su marca."}
+  const sistemaConstructivo = [
+    `Modelo seleccionado: ${modeloInfo.nombre}.`,
+    `Medida base sugerida: ${modeloInfo.medida_base}.`,
+    modeloInfo.descripcion,
+    "Formato circular 1:1, fabricable en taller, con espesor visible y montaje real.",
+    "No convertir en rótulo rectangular ni en producto distinto a botón publicitario."
+  ];
 
-WhatsApp del cliente:
-${whatsapp}
+  const iluminacion = [
+    "Usar luz de rebote suave o iluminación frontal según material y modelo.",
+    "La luz debe acompañar la paleta de la marca, no competir con ella.",
+    "Dorado: cálida. Azul: blanco frío o azul suave. Verde: verde suave. Multicolor: blanco neutro.",
+    "Evitar sobreexposición, halos exagerados o efectos no fabricables."
+  ];
 
-Logo enviado:
-${logoUrl ? `Sí. Referencia: ${logoUrl}` : "No confirmado."}
+  const mejorasSugeridas = [
+    "Ajustar proporción del logo para lectura clara a distancia.",
+    "Simplificar solo elementos secundarios que afecten fabricación o legibilidad.",
+    "Mantener identidad visual principal sin inventar textos, eslóganes ni nueva marca.",
+    "Preparar versión limpia para render manual y posterior producción."
+  ];
 
-Foto del lugar:
-${lugarUrl ? `Sí. Referencia: ${lugarUrl}` : "No enviada."}
+  const instruccionesDisenador = [
+    "Crear render manual profesional 1:1 basado en esta orden técnica.",
+    "Usar fondo sobrio, pared limpia o contexto comercial realista.",
+    "Mostrar volumen físico, canto, sombras suaves, reflejos controlados y escala real.",
+    "No mostrar procesos internos, costos, fórmulas ni materiales sensibles al cliente.",
+    "Preparar propuesta para envío por WhatsApp al cliente."
+  ];
 
-Reglas obligatorias:
-${perfil.reglas.map((r) => `- ${r}`).join("\n")}
+  const observaciones = [
+    logoUrl ? `Logo o referencia recibida: ${logoUrl}` : "No se recibió logo confirmado.",
+    lugarUrl ? `Foto del lugar recibida: ${lugarUrl}` : "No se recibió foto del lugar.",
+    idea ? `Idea del cliente: ${idea}` : "El cliente solicita una propuesta profesional personalizada.",
+    `WhatsApp del cliente: ${whatsapp}`
+  ];
 
-Dirección visual:
-- Render cuadrado 1024x1024.
-- Producto circular real, proporción 1:1.
-- Botón publicitario premium montado en pared limpia o contexto comercial sobrio.
-- Acabados realistas: acrílico, impresión, brillo controlado y volumen físico.
-- Iluminación profesional sin exagerar.
-- Nada de rótulos rectangulares.
-- Nada de productos ajenos a botones.
-- No agregar textos inventados fuera del logo o idea de marca.
-- Resultado vendible, elegante, moderno y fabricable.
-`;
+  return {
+    producto: perfil.producto,
+    especialista: perfil.especialista,
+    modelo,
+    modelo_nombre: modeloInfo.nombre,
+    precio_referencia: modeloInfo.precio,
+    medida_base: modeloInfo.medida_base,
+    analisis_grafico: analisisGrafico,
+    materiales_recomendados: materialesRecomendados,
+    sistema_constructivo: sistemaConstructivo,
+    iluminacion,
+    mejoras_sugeridas: mejorasSugeridas,
+    instrucciones_disenador: instruccionesDisenador,
+    observaciones
+  };
 }
 
 const ORDEN_MAESTRA_RENDER_BOTONES = `
-Eres ELAN AI DESIGNER, Director de Arte Senior y especialista en fabricación de rótulos para ELANVISUAL.
-
-OBJETIVO:
-Transformar el diseño recibido en un render hiperrealista de un Botón Publicitario Premium fabricable, manteniendo la línea gráfica original y mejorando únicamente lo necesario para que funcione como rótulo comercial profesional.
-
-NO eres libre de crear otra marca.
-NO debes inventar un nuevo logotipo.
-NO debes cambiar el concepto gráfico original.
-
-ROL CORRECTO:
-Actúa como diseñador gráfico profesional y fabricante experto.
-Analiza el diseño, entiende su estilo, respeta su identidad y adapta la ejecución al modelo de rótulo seleccionado.
-
-IDENTIDAD VISUAL:
-Conserva el nombre de la marca, textos principales, estilo gráfico, colores dominantes, personalidad, elementos decorativos importantes, composición general e intención visual.
-El cliente debe reconocer inmediatamente su diseño.
-
-MEJORAS PERMITIDAS:
-Puedes mejorar alineación, limpieza visual, equilibrio, márgenes, jerarquía, legibilidad, proporción interna, integración al formato circular, profundidad, materiales, iluminación y acabado.
-Estas mejoras deben ser sutiles, profesionales y coherentes con la muestra.
-Nunca deben convertir el diseño en otra marca ni en otro estilo.
-
-PROHIBIDO:
-No reemplazar el logotipo.
-No cambiar el nombre.
-No inventar textos nuevos.
-No agregar eslóganes.
-No eliminar elementos importantes.
-No cambiar la paleta cromática principal.
-No cambiar tipografías si forman parte de la identidad.
-No convertir el diseño en minimalista si no lo es.
-No simplificar ilustraciones importantes.
-No reinterpretar el arte como una marca genérica.
-No generar una versión inspirada.
-
-MODELOS DE PRODUCCIÓN:
-
-1. boton-transparente:
-Acrílico transparente, relieve en acrílico o vinil frost, corte láser, cuatro capatones metálicos, separadores, cantos pulidos, espesor visible y luz de rebote suave. Estilo limpio, elegante y moderno.
-
-2. boton-con-impresion:
-Acrílico transparente con impresión full color sobre vinil de alta resolución, relieve en corte láser, acabado brillante, iluminación LED RGB opcional. Ideal para negocios comerciales, restaurantes, tiendas y bares.
-
-3. boton-uv-premium:
-Impresión UV directa sobre acrílico, colores intensos, piezas cortadas en láser, acabados premium, resistencia exterior, volumen moderado y apariencia de alta calidad.
-
-4. boton-premium-combinado:
-Rótulo circular personalizado con combinación de acrílico, PVC, MDF, ACM, madera, impresión UV, corte CNC, corte láser e iluminación LED según el diseño. Mayor volumen, texturas y presencia visual, siempre fabricable.
-
-FABRICACIÓN:
-El modelo seleccionado define materiales, espesores, iluminación, acabados, montaje y sistema constructivo.
-No improvises materiales fuera del modelo seleccionado.
-Todo debe verse físicamente posible de fabricar en taller.
-Usa escala real, espesor visible, sombras suaves, reflejos correctos y proporciones comerciales reales.
-
-ILUMINACIÓN:
-La luz debe acompañar los colores del diseño.
-No debe dominar ni alterar la identidad visual.
-Logo dorado: luz cálida.
-Logo azul: blanco frío o azul suave.
-Logo verde: verde suave.
-Logo rosa: cálida con ligera dominante rosada.
-Logo multicolor: luz blanca neutra o cálida suave.
-
-CÁMARA:
-Fotografía comercial hiperrealista, lente 50 mm, vista frontal ligeramente lateral, pared limpia, interior moderno, producto enfocado.
-
-RESULTADO:
-Debe parecer un rótulo real diseñado por un diseñador gráfico profesional y fabricado por un taller experto.
-Si el resultado cambia la marca, cambia el nombre, cambia el estilo principal o parece otra empresa, el resultado es incorrecto.
+ELAN AI DESIGNER opera ahora como Director de Arte Técnico.
+No genera imágenes.
+No usa image_generation.
+No devuelve render.
+Debe crear una Orden Técnica para diseño manual profesional.
 `;
-async function manejarRenderBotones(body = {}) {
-  if (!process.env.OPENAI_API_KEY) {
-    return {
-      status: 500,
-      payload: { ok: false, error: "OPENAI_API_KEY no configurada en CORE" }
-    };
-  }
 
+async function manejarRenderBotones(body = {}) {
   if (!supabase) {
     return {
       status: 500,
@@ -276,21 +221,7 @@ async function manejarRenderBotones(body = {}) {
     };
   }
 
-  const usosActuales = await contarUsosRender({ whatsapp });
-
-  if (usosActuales >= 3) {
-    return {
-      status: 200,
-      payload: {
-        ok: false,
-        limite_alcanzado: true,
-        usos_restantes: 0,
-        mensaje: "No es posible generar más propuestas automáticas. Nuestro equipo realizará la digitalización profesional de su proyecto."
-      }
-    };
-  }
-
-  const promptUtilizado = construirPromptRenderBotones({
+  const ordenTecnica = construirOrdenTecnicaRenderBotones({
     producto,
     modelo,
     idea,
@@ -299,59 +230,37 @@ async function manejarRenderBotones(body = {}) {
     lugarUrl
   });
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-  const response = await client.responses.create({
-    model: process.env.OPENAI_RENDER_MODEL || "gpt-5.5",
-    input: [
-      {
-        role: "developer",
-        content: ORDEN_MAESTRA_RENDER_BOTONES
-      },
-      {
-        role: "user",
-        content: [
-          { type: "input_text", text: promptUtilizado },
-          ...(logoUrl ? [{ type: "input_image", image_url: logoUrl }] : []),
-          ...(lugarUrl ? [{ type: "input_image", image_url: lugarUrl }] : [])
-        ]
-      }
-    ],
-    tools: [{ type: "image_generation" }]
-  });
-
-  const imagenBase64 = response.output
-    ?.filter((item) => item.type === "image_generation_call")
-    ?.map((item) => item.result)
-    ?.find(Boolean);
-
-  if (!imagenBase64) {
-    throw new Error("OpenAI no devolvió imagen generada");
-  }
-
-  const imagen = `data:image/png;base64,${imagenBase64}`;
-  const usosNumero = usosActuales + 1;
+  const solicitud = {
+    unidad: "ELANVISUAL",
+    tipo: "solicitud_render_manual",
+    producto,
+    modelo,
+    whatsapp,
+    idea,
+    logo_url: logoUrl || null,
+    lugar_url: lugarUrl || null,
+    orden_tecnica: ordenTecnica,
+    estado: "pendiente_diseno_manual",
+    origen: "ELAN AI DESIGNER",
+    creado_en: new Date().toISOString()
+  };
 
   const { data: insertado, error: insertError } = await supabase
-    .from("elan_ai_renders")
-    .insert({
-      unidad: "ELANVISUAL",
-      producto: "botones",
-      modelo,
-      whatsapp,
-      idea,
-      prompt_utilizado: promptUtilizado,
-      logo_url: logoUrl || null,
-      lugar_url: lugarUrl || null,
-      render_url: imagen,
-      estado: "generado",
-      usos_numero: usosNumero
-    })
+    .from("elan_ai_solicitudes_render")
+    .insert(solicitud)
     .select("id")
     .single();
 
   if (insertError) {
-    console.error("Error guardando render:", insertError);
+    console.error("Error guardando solicitud manual:", insertError);
+    return {
+      status: 500,
+      payload: {
+        ok: false,
+        estado: "error_guardando_solicitud",
+        error: insertError.message
+      }
+    };
   }
 
   return {
@@ -359,12 +268,9 @@ async function manejarRenderBotones(body = {}) {
     payload: {
       ok: true,
       tipo: "render-botones",
-      imagen,
-      prompt_utilizado: promptUtilizado,
-      usos_restantes: Math.max(0, 3 - usosNumero),
-      id_lead: insertado?.id || null,
-      guardado_supabase: !insertError,
-      error_supabase: insertError?.message || null
+      estado: "pendiente_diseno_manual",
+      id_solicitud: insertado?.id || null,
+      mensaje: "Tu solicitud fue enviada correctamente. Nuestro equipo de diseño preparará una propuesta personalizada y la recibirás por WhatsApp."
     }
   };
 }
@@ -472,4 +378,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
