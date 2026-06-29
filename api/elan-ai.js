@@ -212,7 +212,8 @@ async function manejarRenderBotones(body = {}) {
   const modelo = String(body.modelo || "boton-transparente").trim();
   const idea = String(body.idea || body.prompt || body.mensaje || "").trim();
   const logoUrl = String(body.logo_url || body.logo || "").trim();
-  const lugarUrl = String(body.lugar_url || body.foto_lugar || body.foto || "").trim();
+  const referenciaUrl = String(body.referencia_url || "").trim();
+const lugarUrl = String(body.lugar_url || body.foto_lugar || body.foto || "").trim();
 
   if (!whatsapp) {
     return {
@@ -236,8 +237,17 @@ async function manejarRenderBotones(body = {}) {
     producto,
     modelo,
     whatsapp,
+    negocio: body.negocio || null,
+
     idea,
+
+    logo_nombre: body.logo_nombre || null,
     logo_url: logoUrl || null,
+
+    referencia_nombre: body.referencia_nombre || null,
+    referencia_url: referenciaUrl || null,
+
+    lugar_nombre: body.lugar_nombre || null,
     lugar_url: lugarUrl || null,
     orden_tecnica: ordenTecnica,
     estado: "pendiente_diseno_manual",
@@ -378,5 +388,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
+
 
 
