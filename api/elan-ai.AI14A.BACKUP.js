@@ -7,7 +7,6 @@ import {
   obtenerPerfilProducto,
   obtenerModeloBoton
 } from "../lib/aiProductProfiles.js";
-import { analizarImportacionEMC } from "../lib/emc-import-engine.js";
 
 const supabase = crearClienteSupabase();
 
@@ -296,7 +295,7 @@ export default async function handler(req, res) {
       endpoint: "/api/elan-ai",
       status: "online",
       version: "AI-10-DESIGNER",
-      soporta: ["chat", "render-botones", "importar-emc"]
+      soporta: ["chat", "render-botones"]
     });
   }
 
@@ -311,11 +310,6 @@ export default async function handler(req, res) {
     if (tipo === "render-botones") {
       const resultado = await manejarRenderBotones(body);
       return res.status(resultado.status).json(resultado.payload);
-    }
-
-    if (tipo === "importar-emc") {
-      const resultado = await analizarImportacionEMC({ body });
-      return res.status(resultado.ok ? 200 : 400).json(resultado);
     }
 
     if (!process.env.OPENAI_API_KEY) {
@@ -390,11 +384,6 @@ export default async function handler(req, res) {
     });
   }
 }
-
-
-
-
-
 
 
 
