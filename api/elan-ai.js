@@ -11,7 +11,7 @@ function json(res, status, data) {
   return res.end(JSON.stringify(data));
 }
 
-async function handler(req, res) {
+export default async function handler(req, res) {
   applyCors(req, res);
 
   if (req.method === "OPTIONS") {
@@ -24,14 +24,12 @@ async function handler(req, res) {
       ok: true,
       service: "ELANKAV CORE AI",
       status: "online",
-      version: "AI-20 SAFE BOOT",
+      version: "AI-20 SAFEBOOT ESM",
     });
   }
 
   return json(res, 200, {
     ok: true,
-    message: "SAFE BOOT activo. API responde.",
+    message: "SAFEBOOT ESM activo. API responde.",
   });
 }
-
-module.exports = handler;
