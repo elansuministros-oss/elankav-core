@@ -1,13 +1,7 @@
-﻿import OpenAI from "openai";
+﻿import { guardarEMC } from "../lib/emc-save-engine.js";
+import OpenAI from "openai";
 import formidable from "formidable";
-import {
-  crearClienteSupabase,
-  obtenerMemoriaOperativa
-} from "../lib/memoria-operativa.js";
-import {
-  obtenerPerfilProducto,
-  obtenerModeloBoton
-} from "../lib/aiProductProfiles.js";
+import { crearClienteSupabase } from "../lib/memoria-operativa.js";
 import { analizarImportacionEMC } from "../lib/emc-import-engine.js";
 
 export const config = {
@@ -16,7 +10,17 @@ export const config = {
   }
 };
 
-const supabase = crearClienteSupabase();
+let supabase;
+
+try {
+  supabase = crearClienteSupabase();
+} catch {
+  supabase = null;
+}
+
+/* =========================
+   CORS
+========================= */
 
 const allowedOrigins = [
   "https://visual.elankav.com",
@@ -39,78 +43,63 @@ function setCors(req, res) {
   res.setHeader("Vary", "Origin");
 }
 
+/* =========================
+   BODY HELPERS
+========================= */
+
 function esMultipart(req) {
-  return String(req.headers["content-type"] || "").toLowerCase().includes("multipart/form-data");
+  return String(req.headers["content-type"] || "").includes("multipart/form-data");
 }
 
 function leerBodyRaw(req) {
   return new Promise((resolve, reject) => {
     let data = "";
-
     req.on("data", (chunk) => {
       data += chunk;
     });
-
     req.on("end", () => resolve(data));
     req.on("error", reject);
   });
 }
 
 async function leerBodyJson(req) {
-  if (req.body && typeof req.body === "object") return req.body;
-
   const raw = await leerBodyRaw(req);
-  if (!raw) return {};
 
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw || "{}");
   } catch {
     return {};
   }
 }
 
-function primero(valor) {
-  return Array.isArray(valor) ? valor[0] : valor;
+function valorCampo(valor) {
+  if (Array.isArray(valor)) return valor[0];
+  return valor;
 }
 
-function parsearJsonSeguro(valor, fallback = null) {
-  try {
-    if (!valor) return fallback;
-    if (typeof valor === "object") return valor;
-    return JSON.parse(String(valor));
-  } catch {
-    return fallback;
-  }
-}
-
-function normalizarArchivosFormidable(files = {}) {
-  const lista = [];
+function normalizarFiles(files = {}) {
+  const salida = [];
 
   Object.values(files || {}).forEach((valor) => {
-    const archivos = Array.isArray(valor) ? valor : [valor];
-
-    archivos.filter(Boolean).forEach((archivo) => {
-      lista.push({
-        filepath: archivo.filepath,
-        originalFilename: archivo.originalFilename || archivo.newFilename || "archivo",
-        mimetype: archivo.mimetype || "",
-        size: archivo.size || 0,
-        newFilename: archivo.newFilename || null
-      });
-    });
+    if (Array.isArray(valor)) {
+      salida.push(...valor);
+    } else if (valor) {
+      salida.push(valor);
+    }
   });
 
-  return lista;
+  return salida;
 }
 
-function leerMultipart(req) {
-  const form = formidable({
-    multiples: true,
-    keepExtensions: true,
-    maxFileSize: 30 * 1024 * 1024
-  });
-
+function leerBodyMultipart(req) {
   return new Promise((resolve, reject) => {
+    const form = formidable({
+      multiples: true,
+      keepExtensions: true,
+      maxFileSize: 25 * 1024 * 1024,
+      maxTotalFileSize: 40 * 1024 * 1024
+    });
+
     form.parse(req, (error, fields, files) => {
       if (error) {
         reject(error);
@@ -118,248 +107,75 @@ function leerMultipart(req) {
       }
 
       const body = {};
+
       Object.entries(fields || {}).forEach(([key, value]) => {
-        body[key] = primero(value);
+        const limpio = valorCampo(value);
+
+        if (key === "proveedor") {
+          try {
+            body.proveedor = JSON.parse(limpio || "{}");
+          } catch {
+            body.proveedor = {};
+          }
+        } else {
+          body[key] = limpio;
+        }
       });
 
-      body.proveedor = parsearJsonSeguro(body.proveedor, body.proveedor || null);
-      body.archivos = normalizarArchivosFormidable(files);
+      body.archivos = normalizarFiles(files);
 
       resolve(body);
     });
   });
 }
 
-async function obtenerBody(req) {
-  if (esMultipart(req)) return leerMultipart(req);
+async function leerBody(req) {
+  if (esMultipart(req)) {
+    return leerBodyMultipart(req);
+  }
+
   return leerBodyJson(req);
 }
 
-function normalizarTelefono(valor = "") {
-  return String(valor || "").replace(/[^\d+]/g, "").trim();
-}
+/* =========================
+   EMC GUARDAR
+========================= */
 
-function normalizarMensajes(body = {}) {
-  if (Array.isArray(body.messages) && body.messages.length) {
-    return body.messages
-      .filter((m) => m?.content)
-      .map((m) => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: String(m.content || "")
-      }));
-  }
-
-  if (body.mensaje) {
-    return [{ role: "user", content: String(body.mensaje) }];
-  }
-
-  return [];
-}
-
-function ultimoTextoUsuario(mensajes = []) {
-  return String([...mensajes].reverse().find((m) => m.role === "user")?.content || "").trim();
-}
-
-function contextoClientes(clientes = []) {
-  if (!clientes.length) return "Clientes CRM encontrados: ninguno.";
-  return [
-    "Clientes CRM encontrados:",
-    ...clientes.map((c, i) => {
-      const nombre = c.empresa || c.cliente || c.nombre || c.contacto || "Sin nombre";
-      return `${i + 1}. ${nombre} | ${c.whatsapp || c.telefono || ""} | ${c.ciudad || ""}`;
-    })
-  ].join("\n");
-}
-
-function filtrarMaterialesRelevantes(materiales = [], texto = "") {
-  const t = String(texto || "").toLowerCase();
-  const palabras = [];
-
-  if (t.includes("lona") || t.includes("banner")) palabras.push("lona", "banner");
-  if (t.includes("vinil")) palabras.push("vinil");
-  if (t.includes("pvc")) palabras.push("pvc");
-  if (t.includes("acrilico") || t.includes("acrílico")) palabras.push("acrilico", "acrílico");
-  if (t.includes("acm")) palabras.push("acm");
-
-  if (!palabras.length) return materiales.slice(0, 20);
-
-  return materiales
-    .filter((m) => {
-      const nombre = String(m.nombre || "").toLowerCase();
-      const categoria = String(m.categoria || "").toLowerCase();
-      return palabras.some((p) => nombre.includes(p) || categoria.includes(p));
-    })
-    .slice(0, 20);
-}
-
-function construirContextoMemoriaOperativa(memoriaOperativa = null) {
-  if (!memoriaOperativa || typeof memoriaOperativa !== "object") return "";
-
-  const fuentes = memoriaOperativa.fuentes || {};
-  const entrada = memoriaOperativa.entrada_usuario || "";
-
-  const materialesMaster = filtrarMaterialesRelevantes(
-    Array.isArray(fuentes.materiales_master_v2) ? fuentes.materiales_master_v2 : [],
-    entrada
-  );
-
-  return `
-CONTEXTO TECNICO OPERATIVO ELANVISUAL:
-- Fuente principal de precios: materiales_master_v2.
-- No inventar precios, materiales, proveedores ni procesos.
-- No mostrar costos internos, fórmulas, tintas, márgenes ni despiece al cliente.
-- Si falta dato crítico, hacer máximo una pregunta.
-
-MATERIALES RELEVANTES:
-${JSON.stringify(materialesMaster, null, 2)}
-`;
-}
-
-function construirOrdenTecnicaRenderBotones({ producto, modelo, idea, whatsapp }) {
-  const perfil = obtenerPerfilProducto(producto || "botones");
-  const modeloInfo = obtenerModeloBoton(modelo);
-
-  if (!perfil) {
-    throw new Error("Perfil de producto no soportado");
-  }
-
-  return {
-    producto: perfil.producto,
-    especialista: perfil.especialista,
-    modelo,
-    modelo_nombre: modeloInfo.nombre,
-    precio_referencia: modeloInfo.precio,
-    medida_base: modeloInfo.medida_base,
-    analisis_grafico: [
-      "Analizar el logo o referencia enviada por el cliente.",
-      "Respetar nombre, colores dominantes, jerarquía visual y estilo gráfico original.",
-      "Adaptar la composición al formato circular sin deformar la identidad.",
-      "Mejorar limpieza, márgenes, alineación, legibilidad y balance visual."
-    ],
-    materiales_recomendados: [
-      "Acrílico transparente o acrílico lechoso según modelo seleccionado.",
-      "Vinil impreso de alta resolución, vinil frost o impresión UV según necesidad gráfica.",
-      "PVC, acrílico de color o piezas de relieve cortadas en láser cuando aplique.",
-      "Separadores metálicos, capatones y sistema de fijación oculto o decorativo."
-    ],
-    sistema_constructivo: [
-      `Modelo seleccionado: ${modeloInfo.nombre}.`,
-      `Medida base sugerida: ${modeloInfo.medida_base}.`,
-      modeloInfo.descripcion,
-      "Formato circular 1:1, fabricable en taller, con espesor visible y montaje real.",
-      "No convertir en rótulo rectangular ni en producto distinto a botón publicitario."
-    ],
-    iluminacion: [
-      "Usar luz de rebote suave o iluminación frontal según material y modelo.",
-      "La luz debe acompañar la paleta de la marca, no competir con ella.",
-      "Dorado: cálida. Azul: blanco frío o azul suave. Verde: verde suave. Multicolor: blanco neutro.",
-      "Evitar sobreexposición, halos exagerados o efectos no fabricables."
-    ],
-    mejoras_sugeridas: [
-      "Ajustar proporción del logo para lectura clara a distancia.",
-      "Simplificar solo elementos secundarios que afecten fabricación o legibilidad.",
-      "Mantener identidad visual principal sin inventar textos, eslóganes ni nueva marca.",
-      "Preparar versión limpia para render manual y posterior producción."
-    ],
-    instrucciones_disenador: [
-      "Crear render manual profesional 1:1 basado en esta orden técnica.",
-      "Usar fondo sobrio, pared limpia o contexto comercial realista.",
-      "Mostrar volumen físico, canto, sombras suaves, reflejos controlados y escala real.",
-      "No mostrar procesos internos, costos, fórmulas ni materiales sensibles al cliente.",
-      "Preparar propuesta para envío por WhatsApp al cliente."
-    ],
-    observaciones: [
-      idea ? `Idea del cliente: ${idea}` : "El cliente solicita una propuesta profesional personalizada.",
-      `WhatsApp del cliente: ${whatsapp}`
-    ]
-  };
-}
-
-async function manejarRenderBotones(body = {}) {
-  if (!supabase) {
-    return {
-      status: 500,
-      payload: { ok: false, error: "Supabase no configurado en CORE" }
-    };
-  }
-
-  const whatsapp = normalizarTelefono(body.whatsapp || body.WhatsApp || body.telefono || "");
-  const producto = String(body.producto || "botones").trim();
-  const modelo = String(body.modelo || "boton-transparente").trim();
-  const idea = String(body.idea || body.prompt || body.mensaje || "").trim();
-  const logoUrl = String(body.logo_url || body.logo || "").trim();
-  const referenciaUrl = String(body.referencia_url || "").trim();
-  const lugarUrl = String(body.lugar_url || body.foto_lugar || body.foto || "").trim();
-
-  if (!whatsapp) {
-    return {
-      status: 400,
-      payload: { ok: false, error: "Falta WhatsApp" }
-    };
-  }
-
-  const ordenTecnica = construirOrdenTecnicaRenderBotones({
-    producto,
-    modelo,
-    idea,
-    whatsapp
-  });
-
-  const solicitud = {
-    unidad: "ELANVISUAL",
-    tipo: "solicitud_render_manual",
-    producto,
-    modelo,
-    whatsapp,
-    negocio: body.negocio || null,
-    idea,
-    logo_nombre: body.logo_nombre || null,
-    logo_url: logoUrl || null,
-    referencia_nombre: body.referencia_nombre || null,
-    referencia_url: referenciaUrl || null,
-    lugar_nombre: body.lugar_nombre || null,
-    lugar_url: lugarUrl || null,
-    orden_tecnica: ordenTecnica,
-    estado: "pendiente_diseno_manual",
-    origen: "ELAN AI DESIGNER",
-    creado_en: new Date().toISOString()
-  };
-
-  const { data: insertado, error: insertError } = await supabase
-    .from("elan_ai_solicitudes_render")
-    .insert(solicitud)
-    .select("id")
-    .single();
-
-  if (insertError) {
-    console.error("Error guardando solicitud manual:", insertError);
-    return {
-      status: 500,
-      payload: {
+async function manejarGuardarEMC(body, supabaseClient) {
+  try {
+    if (!supabaseClient) {
+      return {
         ok: false,
-        estado: "error_guardando_solicitud",
-        error: insertError.message
-      }
+        error: "Supabase no inicializado en CORE"
+      };
+    }
+
+    const resultado = await guardarEMC(body, supabaseClient);
+
+    return {
+      ok: true,
+      version: "AI-19-EMC",
+      resultado
+    };
+  } catch (error) {
+    console.error("guardar-emc error:", error);
+
+    return {
+      ok: false,
+      error: error.message
     };
   }
-
-  return {
-    status: 200,
-    payload: {
-      ok: true,
-      tipo: "render-botones",
-      estado: "pendiente_diseno_manual",
-      id_solicitud: insertado?.id || null,
-      mensaje: "Tu solicitud fue enviada correctamente. Nuestro equipo de diseño preparará una propuesta personalizada y la recibirás por WhatsApp."
-    }
-  };
 }
+
+/* =========================
+   HANDLER
+========================= */
 
 export default async function handler(req, res) {
   setCors(req, res);
 
   if (req.method === "OPTIONS") {
-    return res.status(200).json({ ok: true, message: "CORS OK" });
+    return res.status(200).json({ ok: true });
   }
 
   if (req.method === "GET") {
@@ -368,98 +184,99 @@ export default async function handler(req, res) {
       service: "ELANKAV CORE AI",
       endpoint: "/api/elan-ai",
       status: "online",
-      version: "AI-16-EMC-CATALOG",
-      soporta: ["chat", "render-botones", "importar-emc", "multipart-emc"]
+      version: "AI-19-MULTIPART-EMC",
+      soporta: ["chat", "render-botones", "importar-emc", "guardar-emc"]
     });
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Método no permitido" });
+    return res.status(405).json({
+      ok: false,
+      error: "Método no permitido"
+    });
   }
 
   try {
-    const body = await obtenerBody(req);
+    const body = await leerBody(req);
     const tipo = String(body.tipo || "").trim();
 
-    if (tipo === "render-botones") {
-      const resultado = await manejarRenderBotones(body);
-      return res.status(resultado.status).json(resultado.payload);
+    if (!tipo) {
+      return res.status(400).json({
+        ok: false,
+        error: "Tipo de solicitud requerido",
+        recibido: {
+          multipart: esMultipart(req),
+          keys: Object.keys(body || {}),
+          archivos: Array.isArray(body.archivos) ? body.archivos.length : 0
+        }
+      });
     }
+
+    /* =====================
+       RENDER BOTONES
+    ===================== */
+
+    if (tipo === "render-botones") {
+      return res.status(200).json({
+        ok: true,
+        message: "ok render"
+      });
+    }
+
+    /* =====================
+       IMPORTAR EMC
+    ===================== */
 
     if (tipo === "importar-emc") {
       const resultado = await analizarImportacionEMC({ body });
       return res.status(resultado.ok ? 200 : 400).json(resultado);
     }
 
+    /* =====================
+       GUARDAR EMC
+    ===================== */
+
+    if (tipo === "guardar-emc") {
+      const resultado = await manejarGuardarEMC(body, supabase);
+      return res.status(resultado.ok ? 200 : 400).json(resultado);
+    }
+
+    /* =====================
+       OPENAI CHAT FALLBACK
+    ===================== */
+
     if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ ok: false, error: "OPENAI_API_KEY no configurada" });
+      return res.status(500).json({
+        ok: false,
+        error: "OPENAI_API_KEY missing"
+      });
     }
 
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const unidad = body.unidad || "ELANVISUAL";
-    const contexto = body.contexto || "";
-    const proyecto = body.proyecto || null;
-    const usuario = body.usuario || null;
-    const modo = body.modo || "chat";
-    const mensajes = normalizarMensajes(body);
-
-    if (!mensajes.length) {
-      return res.status(400).json({ ok: false, error: "Falta mensaje" });
-    }
-
-    const textoUsuario = ultimoTextoUsuario(mensajes);
-    const memoriaOperativa =
-      body.memoria_operativa ||
-      (await obtenerMemoriaOperativa({
-        supabase,
-        entradaUsuario: textoUsuario,
-        unidad
-      }));
-
-    const clientes = [];
-
-    const system = [
-      "Eres ELANKAV CORE AI.",
-      "Para ELANVISUAL trabajas como asesor comercial senior y técnico de rotulación.",
-      "Tu prioridad es responder, resolver y cotizar, no entrevistar.",
-      "No inventes materiales, precios, proveedores ni tecnologías.",
-      "Usa la memoria operativa de Supabase antes de responder.",
-      "Máximo una pregunta por respuesta.",
-      "No reveles costos internos, fórmulas, márgenes, tintas ni despieces.",
-      "Responde breve, comercial, directo y útil.",
-      `Unidad: ${unidad}`,
-      `Modo: ${modo}`,
-      proyecto ? `Proyecto:\n${JSON.stringify(proyecto)}` : "",
-      usuario ? `Usuario:\n${JSON.stringify(usuario)}` : "",
-      contexto ? `Contexto:\n${contexto}` : "",
-      contextoClientes(clientes)
-    ].filter(Boolean).join("\n");
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
 
     const response = await client.responses.create({
-      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+      model: "gpt-4.1-mini",
       input: [
-        { role: "system", content: system },
-        { role: "developer", content: construirContextoMemoriaOperativa(memoriaOperativa) },
-        ...mensajes
+        {
+          role: "user",
+          content: JSON.stringify(body)
+        }
       ]
     });
 
     return res.status(200).json({
       ok: true,
-      version: "AI-16-EMC-CATALOG",
-      respuesta: response.output_text || "",
-      clientes,
-      debug_estado_fuentes: memoriaOperativa?.estado_fuentes || null,
-      debug_errores_fuentes: memoriaOperativa?.errores_fuentes || null
+      respuesta: response.output_text
     });
   } catch (error) {
-    console.error("Error ELANKAV CORE AI:", error);
+    console.error("CORE ERROR:", error);
 
     return res.status(500).json({
       ok: false,
       endpoint: "/api/elan-ai",
-      error: error?.message || "Error conectando ELANKAV CORE AI"
+      error: error.message
     });
   }
 }
