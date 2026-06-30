@@ -1,4 +1,5 @@
 ﻿import OpenAI from "openai";
+import formidable from "formidable";
 import {
   crearClienteSupabase,
   obtenerMemoriaOperativa
@@ -8,6 +9,12 @@ import {
   obtenerModeloBoton
 } from "../lib/aiProductProfiles.js";
 import { analizarImportacionEMC } from "../lib/emc-import-engine.js";
+
+export const config = {
+  api: {
+    bodyParser: false
+  }
+};
 
 const supabase = crearClienteSupabase();
 
@@ -30,6 +37,102 @@ function setCors(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Vary", "Origin");
+}
+
+function esMultipart(req) {
+  return String(req.headers["content-type"] || "").toLowerCase().includes("multipart/form-data");
+}
+
+function leerBodyRaw(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+
+    req.on("data", (chunk) => {
+      data += chunk;
+    });
+
+    req.on("end", () => resolve(data));
+    req.on("error", reject);
+  });
+}
+
+async function leerBodyJson(req) {
+  if (req.body && typeof req.body === "object") return req.body;
+
+  const raw = await leerBodyRaw(req);
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function primero(valor) {
+  return Array.isArray(valor) ? valor[0] : valor;
+}
+
+function parsearJsonSeguro(valor, fallback = null) {
+  try {
+    if (!valor) return fallback;
+    if (typeof valor === "object") return valor;
+    return JSON.parse(String(valor));
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizarArchivosFormidable(files = {}) {
+  const lista = [];
+
+  Object.values(files || {}).forEach((valor) => {
+    const archivos = Array.isArray(valor) ? valor : [valor];
+
+    archivos.filter(Boolean).forEach((archivo) => {
+      lista.push({
+        filepath: archivo.filepath,
+        originalFilename: archivo.originalFilename || archivo.newFilename || "archivo",
+        mimetype: archivo.mimetype || "",
+        size: archivo.size || 0,
+        newFilename: archivo.newFilename || null
+      });
+    });
+  });
+
+  return lista;
+}
+
+function leerMultipart(req) {
+  const form = formidable({
+    multiples: true,
+    keepExtensions: true,
+    maxFileSize: 30 * 1024 * 1024
+  });
+
+  return new Promise((resolve, reject) => {
+    form.parse(req, (error, fields, files) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      const body = {};
+      Object.entries(fields || {}).forEach(([key, value]) => {
+        body[key] = primero(value);
+      });
+
+      body.proveedor = parsearJsonSeguro(body.proveedor, body.proveedor || null);
+      body.archivos = normalizarArchivosFormidable(files);
+
+      resolve(body);
+    });
+  });
+}
+
+async function obtenerBody(req) {
+  if (esMultipart(req)) return leerMultipart(req);
+  return leerBodyJson(req);
 }
 
 function normalizarTelefono(valor = "") {
@@ -112,66 +215,13 @@ ${JSON.stringify(materialesMaster, null, 2)}
 `;
 }
 
-async function contarUsosRender({ whatsapp }) {
-  return 0;
-}
-
 function construirOrdenTecnicaRenderBotones({ producto, modelo, idea, whatsapp }) {
-const perfil = obtenerPerfilProducto(producto || "botones");
+  const perfil = obtenerPerfilProducto(producto || "botones");
   const modeloInfo = obtenerModeloBoton(modelo);
 
   if (!perfil) {
     throw new Error("Perfil de producto no soportado");
   }
-
-  const analisisGrafico = [
-    "Analizar el logo o referencia enviada por el cliente.",
-    "Respetar nombre, colores dominantes, jerarquía visual y estilo gráfico original.",
-    "Adaptar la composición al formato circular sin deformar la identidad.",
-    "Mejorar limpieza, márgenes, alineación, legibilidad y balance visual."
-  ];
-
-  const materialesRecomendados = [
-    "Acrílico transparente o acrílico lechoso según modelo seleccionado.",
-    "Vinil impreso de alta resolución, vinil frost o impresión UV según necesidad gráfica.",
-    "PVC, acrílico de color o piezas de relieve cortadas en láser cuando aplique.",
-    "Separadores metálicos, capatones y sistema de fijación oculto o decorativo."
-  ];
-
-  const sistemaConstructivo = [
-    `Modelo seleccionado: ${modeloInfo.nombre}.`,
-    `Medida base sugerida: ${modeloInfo.medida_base}.`,
-    modeloInfo.descripcion,
-    "Formato circular 1:1, fabricable en taller, con espesor visible y montaje real.",
-    "No convertir en rótulo rectangular ni en producto distinto a botón publicitario."
-  ];
-
-  const iluminacion = [
-    "Usar luz de rebote suave o iluminación frontal según material y modelo.",
-    "La luz debe acompañar la paleta de la marca, no competir con ella.",
-    "Dorado: cálida. Azul: blanco frío o azul suave. Verde: verde suave. Multicolor: blanco neutro.",
-    "Evitar sobreexposición, halos exagerados o efectos no fabricables."
-  ];
-
-  const mejorasSugeridas = [
-    "Ajustar proporción del logo para lectura clara a distancia.",
-    "Simplificar solo elementos secundarios que afecten fabricación o legibilidad.",
-    "Mantener identidad visual principal sin inventar textos, eslóganes ni nueva marca.",
-    "Preparar versión limpia para render manual y posterior producción."
-  ];
-
-  const instruccionesDisenador = [
-    "Crear render manual profesional 1:1 basado en esta orden técnica.",
-    "Usar fondo sobrio, pared limpia o contexto comercial realista.",
-    "Mostrar volumen físico, canto, sombras suaves, reflejos controlados y escala real.",
-    "No mostrar procesos internos, costos, fórmulas ni materiales sensibles al cliente.",
-    "Preparar propuesta para envío por WhatsApp al cliente."
-  ];
-
-    const observaciones = [
-    idea ? `Idea del cliente: ${idea}` : "El cliente solicita una propuesta profesional personalizada.",
-    `WhatsApp del cliente: ${whatsapp}`
-  ];
 
   return {
     producto: perfil.producto,
@@ -180,23 +230,50 @@ const perfil = obtenerPerfilProducto(producto || "botones");
     modelo_nombre: modeloInfo.nombre,
     precio_referencia: modeloInfo.precio,
     medida_base: modeloInfo.medida_base,
-    analisis_grafico: analisisGrafico,
-    materiales_recomendados: materialesRecomendados,
-    sistema_constructivo: sistemaConstructivo,
-    iluminacion,
-    mejoras_sugeridas: mejorasSugeridas,
-    instrucciones_disenador: instruccionesDisenador,
-    observaciones
+    analisis_grafico: [
+      "Analizar el logo o referencia enviada por el cliente.",
+      "Respetar nombre, colores dominantes, jerarquía visual y estilo gráfico original.",
+      "Adaptar la composición al formato circular sin deformar la identidad.",
+      "Mejorar limpieza, márgenes, alineación, legibilidad y balance visual."
+    ],
+    materiales_recomendados: [
+      "Acrílico transparente o acrílico lechoso según modelo seleccionado.",
+      "Vinil impreso de alta resolución, vinil frost o impresión UV según necesidad gráfica.",
+      "PVC, acrílico de color o piezas de relieve cortadas en láser cuando aplique.",
+      "Separadores metálicos, capatones y sistema de fijación oculto o decorativo."
+    ],
+    sistema_constructivo: [
+      `Modelo seleccionado: ${modeloInfo.nombre}.`,
+      `Medida base sugerida: ${modeloInfo.medida_base}.`,
+      modeloInfo.descripcion,
+      "Formato circular 1:1, fabricable en taller, con espesor visible y montaje real.",
+      "No convertir en rótulo rectangular ni en producto distinto a botón publicitario."
+    ],
+    iluminacion: [
+      "Usar luz de rebote suave o iluminación frontal según material y modelo.",
+      "La luz debe acompañar la paleta de la marca, no competir con ella.",
+      "Dorado: cálida. Azul: blanco frío o azul suave. Verde: verde suave. Multicolor: blanco neutro.",
+      "Evitar sobreexposición, halos exagerados o efectos no fabricables."
+    ],
+    mejoras_sugeridas: [
+      "Ajustar proporción del logo para lectura clara a distancia.",
+      "Simplificar solo elementos secundarios que afecten fabricación o legibilidad.",
+      "Mantener identidad visual principal sin inventar textos, eslóganes ni nueva marca.",
+      "Preparar versión limpia para render manual y posterior producción."
+    ],
+    instrucciones_disenador: [
+      "Crear render manual profesional 1:1 basado en esta orden técnica.",
+      "Usar fondo sobrio, pared limpia o contexto comercial realista.",
+      "Mostrar volumen físico, canto, sombras suaves, reflejos controlados y escala real.",
+      "No mostrar procesos internos, costos, fórmulas ni materiales sensibles al cliente.",
+      "Preparar propuesta para envío por WhatsApp al cliente."
+    ],
+    observaciones: [
+      idea ? `Idea del cliente: ${idea}` : "El cliente solicita una propuesta profesional personalizada.",
+      `WhatsApp del cliente: ${whatsapp}`
+    ]
   };
 }
-
-const ORDEN_MAESTRA_RENDER_BOTONES = `
-ELAN AI DESIGNER opera ahora como Director de Arte Técnico.
-No genera imágenes.
-No usa image_generation.
-No devuelve render.
-Debe crear una Orden Técnica para diseño manual profesional.
-`;
 
 async function manejarRenderBotones(body = {}) {
   if (!supabase) {
@@ -212,7 +289,7 @@ async function manejarRenderBotones(body = {}) {
   const idea = String(body.idea || body.prompt || body.mensaje || "").trim();
   const logoUrl = String(body.logo_url || body.logo || "").trim();
   const referenciaUrl = String(body.referencia_url || "").trim();
-const lugarUrl = String(body.lugar_url || body.foto_lugar || body.foto || "").trim();
+  const lugarUrl = String(body.lugar_url || body.foto_lugar || body.foto || "").trim();
 
   if (!whatsapp) {
     return {
@@ -221,7 +298,7 @@ const lugarUrl = String(body.lugar_url || body.foto_lugar || body.foto || "").tr
     };
   }
 
-    const ordenTecnica = construirOrdenTecnicaRenderBotones({
+  const ordenTecnica = construirOrdenTecnicaRenderBotones({
     producto,
     modelo,
     idea,
@@ -235,15 +312,11 @@ const lugarUrl = String(body.lugar_url || body.foto_lugar || body.foto || "").tr
     modelo,
     whatsapp,
     negocio: body.negocio || null,
-
     idea,
-
     logo_nombre: body.logo_nombre || null,
     logo_url: logoUrl || null,
-
     referencia_nombre: body.referencia_nombre || null,
     referencia_url: referenciaUrl || null,
-
     lugar_nombre: body.lugar_nombre || null,
     lugar_url: lugarUrl || null,
     orden_tecnica: ordenTecnica,
@@ -295,8 +368,8 @@ export default async function handler(req, res) {
       service: "ELANKAV CORE AI",
       endpoint: "/api/elan-ai",
       status: "online",
-      version: "AI-10-DESIGNER",
-      soporta: ["chat", "render-botones", "importar-emc"]
+      version: "AI-16-EMC-CATALOG",
+      soporta: ["chat", "render-botones", "importar-emc", "multipart-emc"]
     });
   }
 
@@ -305,7 +378,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body = req.body || {};
+    const body = await obtenerBody(req);
     const tipo = String(body.tipo || "").trim();
 
     if (tipo === "render-botones") {
@@ -374,7 +447,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      version: "AI-10-DESIGNER",
+      version: "AI-16-EMC-CATALOG",
       respuesta: response.output_text || "",
       clientes,
       debug_estado_fuentes: memoriaOperativa?.estado_fuentes || null,
@@ -390,12 +463,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
-
-
-
-
-
-
-
-
