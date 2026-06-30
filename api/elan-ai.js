@@ -1,6 +1,6 @@
 ﻿/* eslint-disable no-console */
 
-module.exports.config = {
+export const config = {
   api: {
     bodyParser: false,
   },
@@ -519,4 +519,4 @@ async function handler(req, res) {
   }
 }
 
-module.exports = handler;
+export default handler;
