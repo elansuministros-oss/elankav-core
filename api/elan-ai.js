@@ -1,8 +1,5 @@
 ﻿/* eslint-disable no-console */
 
-const fs = require("fs");
-const path = require("path");
-
 module.exports.config = {
   api: {
     bodyParser: false,
@@ -12,11 +9,38 @@ module.exports.config = {
 const JOBS = global.__EMC_VISION_JOBS__ || new Map();
 global.__EMC_VISION_JOBS__ = JOBS;
 
+const ALLOWED_ORIGINS = new Set([
+  "https://visual.elankav.com",
+  "https://elankav-core.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+]);
+
 function nowISO() {
   return new Date().toISOString();
 }
 
-function json(res, status, payload) {
+function applyCors(req, res) {
+  const origin = req.headers.origin || "";
+
+  if (ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "https://visual.elankav.com");
+  }
+
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+  );
+  res.setHeader("Access-Control-Max-Age", "86400");
+}
+
+function json(req, res, status, payload) {
+  applyCors(req, res);
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(payload));
@@ -25,7 +49,7 @@ function json(res, status, payload) {
 function safeRequire(modulePath) {
   try {
     return require(modulePath);
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -140,7 +164,7 @@ async function callFirstAvailable(mod, names, args) {
   return null;
 }
 
-function createLocalJob(payload) {
+function createLocalJob(payload = {}) {
   const jobId =
     "emc_job_" +
     Date.now().toString(36) +
@@ -154,6 +178,8 @@ function createLocalJob(payload) {
     proveedor_id: payload.proveedor_id || payload.proveedorId || null,
     proveedor_nombre: payload.proveedor_nombre || payload.proveedor || null,
     archivo_nombre: null,
+    archivo_path: null,
+    mime: null,
     pagina_actual: 0,
     paginas_total: 0,
     porcentaje: 0,
@@ -168,6 +194,7 @@ function createLocalJob(payload) {
   };
 
   const file = getUploadedFile(payload);
+
   if (file) {
     job.archivo_nombre = file.originalFilename || file.newFilename || null;
     job.archivo_path = getFilePath(file);
@@ -263,11 +290,15 @@ async function handleCrearJobEMC(req, res, payload) {
   );
 
   const job = externalJob?.id ? externalJob : createLocalJob(payload);
-  JOBS.set(job.id, { ...createLocalJob({}), ...job, id: job.id });
+
+  JOBS.set(job.id, {
+    ...job,
+    actualizado_en: nowISO(),
+  });
 
   runVisionJobInBackground(job.id, payload);
 
-  return json(res, 200, {
+  return json(req, res, 200, {
     ok: true,
     tipo: "crear-job-emc",
     job_id: job.id,
@@ -279,7 +310,7 @@ async function handleEstadoJobEMC(req, res, payload) {
   const jobId = payload.job_id || payload.jobId || payload.id;
 
   if (!jobId) {
-    return json(res, 400, {
+    return json(req, res, 400, {
       ok: false,
       error: "Falta job_id.",
     });
@@ -296,14 +327,14 @@ async function handleEstadoJobEMC(req, res, payload) {
   const job = externalStatus || JOBS.get(jobId);
 
   if (!job) {
-    return json(res, 404, {
+    return json(req, res, 404, {
       ok: false,
       error: "Job EMC no encontrado.",
       job_id: jobId,
     });
   }
 
-  return json(res, 200, {
+  return json(req, res, 200, {
     ok: true,
     tipo: "estado-job-emc",
     job_id: jobId,
@@ -327,13 +358,13 @@ async function handleImportarEMC(req, res, payload) {
   );
 
   if (!result) {
-    return json(res, 500, {
+    return json(req, res, 500, {
       ok: false,
       error: "No se encontró función compatible en lib/emc-import-engine.js",
     });
   }
 
-  return json(res, 200, {
+  return json(req, res, 200, {
     ok: true,
     tipo: "importar-emc",
     ...result,
@@ -357,13 +388,13 @@ async function handleGuardarEMC(req, res, payload) {
   );
 
   if (!result) {
-    return json(res, 500, {
+    return json(req, res, 500, {
       ok: false,
       error: "No se encontró función compatible en lib/emc-save-engine.js",
     });
   }
 
-  return json(res, 200, {
+  return json(req, res, 200, {
     ok: true,
     tipo: "guardar-emc",
     ...result,
@@ -371,9 +402,16 @@ async function handleGuardarEMC(req, res, payload) {
 }
 
 async function handler(req, res) {
+  applyCors(req, res);
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    return res.end();
+  }
+
   try {
     if (req.method === "GET") {
-      return json(res, 200, {
+      return json(req, res, 200, {
         ok: true,
         service: "ELANKAV CORE AI",
         status: "online",
@@ -382,7 +420,7 @@ async function handler(req, res) {
     }
 
     if (req.method !== "POST") {
-      return json(res, 405, {
+      return json(req, res, 405, {
         ok: false,
         error: "Método no permitido.",
       });
@@ -407,7 +445,7 @@ async function handler(req, res) {
       return await handleGuardarEMC(req, res, payload);
     }
 
-    return json(res, 400, {
+    return json(req, res, 400, {
       ok: false,
       error: "Tipo no soportado en api/elan-ai.js",
       tipo_recibido: tipo || null,
@@ -421,7 +459,7 @@ async function handler(req, res) {
   } catch (error) {
     console.error("ERROR /api/elan-ai:", error);
 
-    return json(res, 500, {
+    return json(req, res, 500, {
       ok: false,
       error: error.message || "Error interno en ELANKAV CORE.",
     });
