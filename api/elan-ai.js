@@ -17,10 +17,6 @@ try {
   supabase = null;
 }
 
-/* =========================
-   CORS
-========================= */
-
 const allowedOrigins = [
   "https://visual.elankav.com",
   "https://elanvisual-platform.vercel.app",
@@ -41,10 +37,6 @@ function setCors(req, res) {
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Vary", "Origin");
 }
-
-/* =========================
-   BODY HELPERS
-========================= */
 
 function esMultipart(req) {
   return String(req.headers["content-type"] || "").includes("multipart/form-data");
@@ -80,11 +72,8 @@ function normalizarFiles(files = {}) {
   const salida = [];
 
   Object.values(files || {}).forEach((valor) => {
-    if (Array.isArray(valor)) {
-      salida.push(...valor);
-    } else if (valor) {
-      salida.push(valor);
-    }
+    if (Array.isArray(valor)) salida.push(...valor);
+    else if (valor) salida.push(valor);
   });
 
   return salida;
@@ -100,10 +89,7 @@ function leerBodyMultipart(req) {
     });
 
     form.parse(req, (error, fields, files) => {
-      if (error) {
-        reject(error);
-        return;
-      }
+      if (error) return reject(error);
 
       const body = {};
 
@@ -122,38 +108,36 @@ function leerBodyMultipart(req) {
       });
 
       body.archivos = normalizarFiles(files);
-
       resolve(body);
     });
   });
 }
 
 async function leerBody(req) {
-  if (esMultipart(req)) {
-    return leerBodyMultipart(req);
-  }
-
+  if (esMultipart(req)) return leerBodyMultipart(req);
   return leerBodyJson(req);
 }
-
-/* =========================
-   EMC GUARDAR
-========================= */
 
 async function manejarGuardarEMC(body, supabaseClient) {
   try {
     if (!supabaseClient) {
       return {
         ok: false,
-        error: "Supabase no inicializado en CORE"
+        error: "Supabase no inicializado en CORE",
+        errores: [{ item: "CORE", error: "Supabase no inicializado en CORE" }]
       };
     }
 
     const resultado = await guardarEMC(body, supabaseClient);
 
     return {
-      ok: true,
+      ok: resultado.ok,
       version: "AI-19-EMC",
+      creados: resultado.creados || 0,
+      actualizados: resultado.actualizados || 0,
+      precios_creados: resultado.precios_creados || 0,
+      precios_actualizados: resultado.precios_actualizados || 0,
+      errores: resultado.errores || [],
       resultado
     };
   } catch (error) {
@@ -161,14 +145,11 @@ async function manejarGuardarEMC(body, supabaseClient) {
 
     return {
       ok: false,
-      error: error.message
+      error: error.message,
+      errores: [{ item: "CORE", error: error.message }]
     };
   }
 }
-
-/* =========================
-   HANDLER
-========================= */
 
 export default async function handler(req, res) {
   setCors(req, res);
@@ -189,10 +170,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({
-      ok: false,
-      error: "Método no permitido"
-    });
+    return res.status(405).json({ ok: false, error: "Método no permitido" });
   }
 
   try {
@@ -211,20 +189,9 @@ export default async function handler(req, res) {
       });
     }
 
-    /* =====================
-       RENDER BOTONES
-    ===================== */
-
     if (tipo === "render-botones") {
-      return res.status(200).json({
-        ok: true,
-        message: "ok render"
-      });
+      return res.status(200).json({ ok: true, message: "ok render" });
     }
-
-    /* =====================
-       IMPORTAR EMC
-    ===================== */
 
     if (tipo === "importar-emc") {
       const { analizarImportacionEMC } = await import("../lib/emc-import-engine.js");
@@ -232,38 +199,20 @@ export default async function handler(req, res) {
       return res.status(resultado.ok ? 200 : 400).json(resultado);
     }
 
-    /* =====================
-       GUARDAR EMC
-    ===================== */
-
     if (tipo === "guardar-emc") {
       const resultado = await manejarGuardarEMC(body, supabase);
       return res.status(resultado.ok ? 200 : 400).json(resultado);
     }
 
-    /* =====================
-       OPENAI CHAT FALLBACK
-    ===================== */
-
     if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({
-        ok: false,
-        error: "OPENAI_API_KEY missing"
-      });
+      return res.status(500).json({ ok: false, error: "OPENAI_API_KEY missing" });
     }
 
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     const response = await client.responses.create({
       model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "user",
-          content: JSON.stringify(body)
-        }
-      ]
+      input: [{ role: "user", content: JSON.stringify(body) }]
     });
 
     return res.status(200).json({
