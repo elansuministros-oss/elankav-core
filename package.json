@@ -1,8 +1,7 @@
-{
+﻿{
   "name": "lab",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,7 +10,6 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
-    "formidable": "^3.5.4",
     "multer": "^2.2.0",
     "openai": "^6.42.0",
     "pdf-parse": "^2.4.5",
