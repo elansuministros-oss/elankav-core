@@ -1,0 +1,54 @@
+### package.json ###
+{
+  "name": "lab",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
+    "formidable": "^3.5.4",
+    "multer": "^2.2.0",
+    "openai": "^6.42.0",
+    "pdf-parse": "^2.4.5",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "vite": "^8.0.12"
+  }
+}
+
+
+### estructura lib/api ###
+@{FullName=D:\ELAN\LAB\lib\aiProductProfiles.js}
+@{FullName=D:\ELAN\LAB\lib\emc-import-engine.js}
+@{FullName=D:\ELAN\LAB\lib\emc-save-engine.js}
+@{FullName=D:\ELAN\LAB\lib\emc-vision-engine.js}
+@{FullName=D:\ELAN\LAB\lib\memoria-operativa.js}
+@{FullName=D:\ELAN\LAB\api\ai.js}
+@{FullName=D:\ELAN\LAB\api\auth.js}
+@{FullName=D:\ELAN\LAB\api\crm-live.js}
+@{FullName=D:\ELAN\LAB\api\elan-ai.AI10C.SUPABASE.BACKUP.js}
+@{FullName=D:\ELAN\LAB\api\elan-ai.AI14A.BACKUP.js}
+@{FullName=D:\ELAN\LAB\api\elan-ai.js}
+@{FullName=D:\ELAN\LAB\api\elan-ai.js.AI10D.PROMPT.BACKUP.js}
+@{FullName=D:\ELAN\LAB\api\elan-memoria.js}
+@{FullName=D:\ELAN\LAB\api\webhook.js}
+
+
+### variables ejemplo si existe ###

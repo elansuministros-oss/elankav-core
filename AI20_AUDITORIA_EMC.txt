@@ -1,0 +1,1163 @@
+==================================================
+AI-20 EMC VISION IMPORT - AUDITORIA CORE
+==================================================
+
+### api/elan-ai.js ###
+
+import { guardarEMC } from "../lib/emc-save-engine.js";
+import OpenAI from "openai";
+import formidable from "formidable";
+import { crearClienteSupabase } from "../lib/memoria-operativa.js";
+
+export const config = {
+  api: {
+    bodyParser: false
+  }
+};
+
+let supabase;
+
+try {
+  supabase = crearClienteSupabase();
+} catch {
+  supabase = null;
+}
+
+const allowedOrigins = [
+  "https://visual.elankav.com",
+  "https://elanvisual-platform.vercel.app",
+  "https://elankav-core.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:5174"
+];
+
+function setCors(req, res) {
+  const origin = req.headers.origin || "";
+  const allowOrigin = allowedOrigins.includes(origin)
+    ? origin
+    : "https://visual.elankav.com";
+
+  res.setHeader("Access-Control-Allow-Origin", allowOrigin);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Vary", "Origin");
+}
+
+function esMultipart(req) {
+  return String(req.headers["content-type"] || "").includes("multipart/form-data");
+}
+
+function leerBodyRaw(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (chunk) => {
+      data += chunk;
+    });
+    req.on("end", () => resolve(data));
+    req.on("error", reject);
+  });
+}
+
+async function leerBodyJson(req) {
+  const raw = await leerBodyRaw(req);
+
+  try {
+    return JSON.parse(raw || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function valorCampo(valor) {
+  if (Array.isArray(valor)) return valor[0];
+  return valor;
+}
+
+function normalizarFiles(files = {}) {
+  const salida = [];
+
+  Object.values(files || {}).forEach((valor) => {
+    if (Array.isArray(valor)) salida.push(...valor);
+    else if (valor) salida.push(valor);
+  });
+
+  return salida;
+}
+
+function leerBodyMultipart(req) {
+  return new Promise((resolve, reject) => {
+    const form = formidable({
+      multiples: true,
+      keepExtensions: true,
+      maxFileSize: 25 * 1024 * 1024,
+      maxTotalFileSize: 40 * 1024 * 1024
+    });
+
+    form.parse(req, (error, fields, files) => {
+      if (error) return reject(error);
+
+      const body = {};
+
+      Object.entries(fields || {}).forEach(([key, value]) => {
+        const limpio = valorCampo(value);
+
+        if (key === "proveedor") {
+          try {
+            body.proveedor = JSON.parse(limpio || "{}");
+          } catch {
+            body.proveedor = {};
+          }
+        } else {
+          body[key] = limpio;
+        }
+      });
+
+      body.archivos = normalizarFiles(files);
+      resolve(body);
+    });
+  });
+}
+
+async function leerBody(req) {
+  if (esMultipart(req)) return leerBodyMultipart(req);
+  return leerBodyJson(req);
+}
+
+async function manejarGuardarEMC(body, supabaseClient) {
+  try {
+    if (!supabaseClient) {
+      return {
+        ok: false,
+        error: "Supabase no inicializado en CORE",
+        errores: [{ item: "CORE", error: "Supabase no inicializado en CORE" }]
+      };
+    }
+
+    const resultado = await guardarEMC(body, supabaseClient);
+
+    return {
+      ok: resultado.ok,
+      version: "AI-19-EMC",
+      creados: resultado.creados || 0,
+      actualizados: resultado.actualizados || 0,
+      precios_creados: resultado.precios_creados || 0,
+      precios_actualizados: resultado.precios_actualizados || 0,
+      errores: resultado.errores || [],
+      resultado
+    };
+  } catch (error) {
+    console.error("guardar-emc error:", error);
+
+    return {
+      ok: false,
+      error: error.message,
+      errores: [{ item: "CORE", error: error.message }]
+    };
+  }
+}
+
+export default async function handler(req, res) {
+  setCors(req, res);
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).json({ ok: true });
+  }
+
+  if (req.method === "GET") {
+    return res.status(200).json({
+      ok: true,
+      service: "ELANKAV CORE AI",
+      endpoint: "/api/elan-ai",
+      status: "online",
+      version: "AI-19-MULTIPART-EMC",
+      soporta: ["chat", "render-botones", "importar-emc", "guardar-emc"]
+    });
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Método no permitido" });
+  }
+
+  try {
+    const body = await leerBody(req);
+    const tipo = String(body.tipo || "").trim();
+
+    if (!tipo) {
+      return res.status(400).json({
+        ok: false,
+        error: "Tipo de solicitud requerido",
+        recibido: {
+          multipart: esMultipart(req),
+          keys: Object.keys(body || {}),
+          archivos: Array.isArray(body.archivos) ? body.archivos.length : 0
+        }
+      });
+    }
+
+    if (tipo === "render-botones") {
+      return res.status(200).json({ ok: true, message: "ok render" });
+    }
+
+    if (tipo === "importar-emc") {
+      const { analizarImportacionEMC } = await import("../lib/emc-import-engine.js");
+      const resultado = await analizarImportacionEMC({ body });
+      return res.status(resultado.ok ? 200 : 400).json(resultado);
+    }
+
+    if (tipo === "guardar-emc") {
+      const resultado = await manejarGuardarEMC(body, supabase);
+      return res.status(resultado.ok ? 200 : 400).json(resultado);
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ ok: false, error: "OPENAI_API_KEY missing" });
+    }
+
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const response = await client.responses.create({
+      model: "gpt-4.1-mini",
+      input: [{ role: "user", content: JSON.stringify(body) }]
+    });
+
+    return res.status(200).json({
+      ok: true,
+      respuesta: response.output_text
+    });
+  } catch (error) {
+    console.error("CORE ERROR:", error);
+
+    return res.status(500).json({
+      ok: false,
+      endpoint: "/api/elan-ai",
+      error: error.message
+    });
+  }
+}
+
+
+### lib/emc-import-engine.js ###
+
+import fs from "fs/promises";
+import * as XLSX from "xlsx";
+import { analizarArchivosConVisionEMC } from "./emc-vision-engine.js";
+
+export function normalizarTexto(valor = "") {
+  return String(valor || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+function normalizarProveedor(valor = null, body = {}) {
+  if (valor && typeof valor === "object") return valor;
+
+  if (typeof valor === "string" && valor.trim()) {
+    const limpio = valor.trim();
+
+    try {
+      return JSON.parse(limpio);
+    } catch {
+      const id = limpio.match(/id\s*:\s*([^,}]+)/i)?.[1]?.replace(/["']/g, "").trim();
+      const nombre = limpio.match(/nombre\s*:\s*([^,}]+)/i)?.[1]?.replace(/["']/g, "").trim();
+
+      if (id || nombre) {
+        return {
+          id: id || null,
+          nombre: nombre || body.proveedor_nombre || "Proveedor no definido"
+        };
+      }
+    }
+  }
+
+  return {
+    id: body.proveedor_id || null,
+    nombre: body.proveedor_nombre || "Proveedor no definido"
+  };
+}
+
+export function detectarMimeArchivo({ fileName = "", mimeType = "" }) {
+  const nombre = String(fileName || "").toLowerCase();
+  const mime = String(mimeType || "").toLowerCase();
+
+  if (mime.includes("pdf") || nombre.endsWith(".pdf")) return "pdf";
+  if (mime.includes("spreadsheet") || nombre.endsWith(".xlsx") || nombre.endsWith(".xls")) return "excel";
+  if (mime.includes("csv") || nombre.endsWith(".csv")) return "csv";
+  if (mime.includes("image") || /\.(png|jpg|jpeg|webp)$/i.test(nombre)) return "imagen";
+  if (mime.includes("text") || nombre.endsWith(".txt")) return "texto";
+
+  return "desconocido";
+}
+
+export function detectarIva(valor = "") {
+  const texto = normalizarTexto(valor).toLowerCase();
+
+  if (texto.includes("iva incluido") || texto.includes("incluye iva")) {
+    return { detectado: true, incluido: true, porcentaje: 15 };
+  }
+
+  if (texto.includes("+ iva") || texto.includes("mas iva") || texto.includes("más iva")) {
+    return { detectado: true, incluido: false, porcentaje: 15 };
+  }
+
+  if (texto.includes("iva")) {
+    return { detectado: true, incluido: null, porcentaje: 15 };
+  }
+
+  return { detectado: false, incluido: null, porcentaje: 15 };
+}
+
+export function detectarUnidad(texto = "") {
+  const t = normalizarTexto(texto).toLowerCase();
+
+  const reglas = [
+    ["metro cuadrado", "m2"], ["m²", "m2"], ["m2", "m2"],
+    ["metro lineal", "ml"], ["ml", "ml"],
+    ["unidad", "unidad"], ["und", "unidad"],
+    ["galon", "galon"], ["galón", "galon"],
+    ["litro", "litro"], ["kg", "kg"], ["libra", "lb"],
+    ["rollo", "rollo"], ["lamina", "lamina"], ["lámina", "lamina"],
+    ["plancha", "plancha"], ["pieza", "pieza"], ["pliego", "pliego"],
+    ["caja", "caja"], ["bolsa", "bolsa"]
+  ];
+
+  const encontrada = reglas.find(([clave]) => t.includes(clave));
+  return encontrada ? encontrada[1] : "unidad";
+}
+
+export function clasificarCategoria(texto = "") {
+  const t = normalizarTexto(texto).toLowerCase();
+
+  if (t.includes("pintura") || t.includes("esmalte") || t.includes("sellador") || t.includes("barniz")) {
+    return { categoria: "Pinturas", subcategoria: "Pinturas y recubrimientos" };
+  }
+
+  if (t.includes("vinil") || t.includes("lona") || t.includes("banner") || t.includes("microperforado")) {
+    return { categoria: "Impresión y rotulación", subcategoria: "Sustratos imprimibles" };
+  }
+
+  if (t.includes("acrilico") || t.includes("acrílico") || t.includes("pvc") || t.includes("acm")) {
+    return { categoria: "Materiales rígidos", subcategoria: "Planchas y láminas" };
+  }
+
+  if (t.includes("led") || t.includes("fuente") || t.includes("transformador")) {
+    return { categoria: "Iluminación", subcategoria: "Componentes eléctricos" };
+  }
+
+  if (t.includes("brocha") || t.includes("rodillo") || t.includes("espatula") || t.includes("espátula") || t.includes("pistola")) {
+    return { categoria: "Herramientas", subcategoria: "Aplicación e instalación" };
+  }
+
+  return { categoria: "General", subcategoria: "Sin clasificar" };
+}
+
+export function extraerPrecio(texto = "") {
+  const t = String(texto || "");
+
+  const match = t.match(
+    /(?:C\$|USD|U\$|\$)\s*:?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?|[0-9]+(?:[.,][0-9]{2})?)/i
+  );
+
+  if (!match) return null;
+
+  const raw = String(match[1] || "").replace(/\s/g, "");
+
+  if (raw.includes(",") && raw.includes(".")) {
+    return Number(raw.replace(/,/g, ""));
+  }
+
+  if (raw.includes(",") && !raw.includes(".")) {
+    const partes = raw.split(",");
+    if (partes[partes.length - 1].length === 2) {
+      return Number(raw.replace(/\./g, "").replace(",", "."));
+    }
+    return Number(raw.replace(/,/g, ""));
+  }
+
+  if (raw.includes(".") && !raw.includes(",")) {
+    const partes = raw.split(".");
+    if (partes.length > 2) {
+      return Number(raw.replace(/\./g, ""));
+    }
+
+    if (partes[1]?.length === 2) {
+      return Number(raw);
+    }
+
+    if (partes[1]?.length === 3) {
+      return Number(raw.replace(/\./g, ""));
+    }
+  }
+
+  return Number(raw);
+}
+export function extraerMedida(texto = "") {
+  const t = String(texto || "");
+
+  const match = t.match(
+    /(\d+(?:[.,]\d+)?)\s*(x|×)\s*(\d+(?:[.,]\d+)?)(?:\s*(mm|cm|m|mts|yds|yd|pulg|"))?/i
+  );
+
+  if (!match) return null;
+
+  return {
+    ancho: Number(String(match[1]).replace(",", ".")),
+    alto: Number(String(match[3]).replace(",", ".")),
+    unidad: match[4] || null,
+    texto: match[0],
+  };
+}
+
+export function extraerCodigo(texto = "") {
+  const t = String(texto || "").trim();
+  const match = t.match(/\b(?:COD|CÓDIGO|CODIGO|SKU|REF|REFERENCIA|MODELO)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{1,})\b/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
+export function detectarMarca(texto = "") {
+  const marcas = [
+    "3M", "Avery", "Avery Dennison", "Oracal", "Orafol", "LG", "Siser",
+    "Starflex", "Alucobond", "Sintra", "Sylvania", "Osram",
+    "Vargasflex", "VargasflexPlus", "Vargasflex Plus", "Promoplus", "LED Solutions"
+  ];
+
+  const t = normalizarTexto(texto).toLowerCase();
+
+  return marcas.find((m) => {
+    const marca = normalizarTexto(m).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^a-z0-9])${marca}([^a-z0-9]|$)`, "i").test(t);
+  }) || null;
+}
+
+function limpiarNombreProducto(linea = "") {
+  return String(linea || "")
+    .replace(/(?:C\$|USD|U\$|\$)\s*[0-9]+(?:[.,][0-9]{1,2})?/gi, "")
+    .replace(/\+?\s*iva\b/gi, "")
+    .replace(/\b(?:precio|unidad|marca)\b[:.]?/gi, "")
+    .replace(/\b(?:codigo|código|cod|sku|ref|referencia)\s*[:#-]?\s*[A-Z0-9-]+\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function extraerTextoPdf(buffer) {
+  if (typeof globalThis.DOMMatrix === "undefined") {
+    globalThis.DOMMatrix = class DOMMatrix {};
+  }
+
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+
+  try {
+    const result = await parser.getText();
+    return result?.text || "";
+  } finally {
+    await parser.destroy();
+  }
+}
+
+async function extraerTextoArchivo(archivo = {}) {
+  const tipo = detectarMimeArchivo({
+    fileName: archivo.originalFilename,
+    mimeType: archivo.mimetype
+  });
+
+  if (!archivo.filepath) {
+    return {
+      tipo,
+      texto: "",
+      multimedia: tipo === "imagen"
+        ? [{ nombre: archivo.originalFilename, mime: archivo.mimetype, estado: "pendiente_ocr" }]
+        : []
+    };
+  }
+
+  if (tipo === "pdf") {
+    const buffer = await fs.readFile(archivo.filepath);
+    const texto = await extraerTextoPdf(buffer);
+    return { tipo, texto, multimedia: [] };
+  }
+
+  if (tipo === "excel") {
+    const buffer = await fs.readFile(archivo.filepath);
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+
+    const textos = workbook.SheetNames.map((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+
+      return [
+        `=== HOJA: ${sheetName} ===`,
+        ...rows.map((row) => row.map((cell) => String(cell || "").trim()).filter(Boolean).join(" | "))
+      ].join("\n");
+    });
+
+    return { tipo, texto: textos.join("\n"), multimedia: [] };
+  }
+
+  if (tipo === "csv" || tipo === "texto") {
+    const buffer = await fs.readFile(archivo.filepath);
+    return { tipo, texto: buffer.toString("utf8"), multimedia: [] };
+  }
+
+  if (tipo === "imagen") {
+    return {
+      tipo,
+      texto: "",
+      multimedia: [{
+        nombre: archivo.originalFilename,
+        mime: archivo.mimetype,
+        size: archivo.size,
+        estado: "pendiente_ocr",
+        nota: "Imagen recibida. OCR/visión se conectará en la siguiente fase."
+      }]
+    };
+  }
+
+  return { tipo, texto: "", multimedia: [] };
+}
+
+function esBasuraEMC(linea = "") {
+  const t = normalizarTexto(linea).toLowerCase();
+
+  if (!t || t.length < 3) return true;
+
+  const basura = [
+    "descripcion medida precio",
+    "descripcion medida precio+iva",
+    "precio+ iva",
+    "precio+iva",
+    "lista de precios 2026",
+    "catalogo",
+    "catalogo 2025",
+    "sobre nosotros",
+    "mision",
+    "vision",
+    "usos y aplicaciones",
+    "caracteristicas",
+    "colores disponibles",
+    "todos los derechos reservados"
+  ];
+
+  if (basura.includes(t)) return true;
+  if (t.includes("consultar terminos")) return true;
+  if (t.includes("whatsapp")) return true;
+  if (t.includes("www.")) return true;
+  if (/^\d+$/.test(t)) return true;
+
+  return false;
+}
+
+function esCategoriaEMC(linea = "") {
+  const t = normalizarTexto(linea).toLowerCase();
+
+  const categorias = [
+    "lonas",
+    "laminas",
+    "viniles",
+    "accesorios",
+    "neon flex",
+    "cintas led",
+    "transformadores",
+    "modulos led",
+    "materiales para rotulacion",
+    "tecnologia",
+    "herramientas",
+    "polarizados",
+    "reflectivos"
+  ];
+
+  return categorias.some((c) => t.includes(c)) && !extraerPrecio(linea);
+}
+
+function tieneProductoEMC(linea = "") {
+  const t = normalizarTexto(linea).toLowerCase();
+
+  return (
+    extraerPrecio(linea) ||
+    extraerMedida(linea) ||
+    /\b(vinil|lona|pvc|acrilico|neon|led|transformador|modulo|cinta|tape|roller|mesa|caja de luz|polarizado|reflectivo|transfer|primer|pegamento)\b/i.test(t)
+  );
+}
+
+function codigoTemporalEMC(nombre = "", index = 0) {
+  const base = normalizarTexto(nombre)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 30);
+
+  return `EMC-${base || "ITEM"}-${String(index + 1).padStart(4, "0")}`;
+}
+
+export function procesarLineasCatalogo({ texto = "", proveedor = null }) {
+  const iva = detectarIva(texto);
+
+  const lineas = String(texto || "")
+    .split(/\r?\n/)
+    .map((x) => x.trim())
+    .filter((x) => x.length > 2)
+    .filter((x) => !/^={3,}/.test(x));
+
+  const items = [];
+  let categoriaActual = "";
+
+  lineas.forEach((linea, index) => {
+    if (esBasuraEMC(linea)) return;
+
+    if (esCategoriaEMC(linea)) {
+      categoriaActual = linea;
+      return;
+    }
+
+    if (!tieneProductoEMC(linea)) return;
+
+    const precio = extraerPrecio(linea);
+    const medida = extraerMedida(linea);
+    const unidad = detectarUnidad(linea);
+    const clasificacion = clasificarCategoria(`${categoriaActual} ${linea}`);
+    const codigo = extraerCodigo(linea);
+    const marca = detectarMarca(linea);
+    const nombre = limpiarNombreProducto(linea);
+
+    if (!nombre || nombre.length < 4) return;
+    if (esBasuraEMC(nombre)) return;
+
+    items.push({
+      codigo: codigo || codigoTemporalEMC(nombre, index),
+      nombre,
+      descripcion_original: linea,
+      categoria_sugerida: clasificacion.categoria,
+      subcategoria_sugerida: clasificacion.subcategoria,
+      marca_sugerida: marca,
+      unidad_sugerida: unidad,
+      medida_detectada: medida,
+      precio_detectado: precio,
+      moneda_sugerida: linea.toLowerCase().includes("c$") || linea.toLowerCase().includes("nio") ? "NIO" : "USD",
+      iva_detectado: iva,
+      proveedor_sugerido:
+        proveedor?.nombre ||
+        proveedor?.nombre_comercial ||
+        proveedor?.razonSocial ||
+        proveedor?.razon_social ||
+        "Proveedor no definido",
+      proveedor_id: proveedor?.id || null,
+      confianza: precio ? 0.86 : 0.62,
+      requiere_revision: !precio || clasificacion.categoria === "General"
+    });
+  });
+
+  return {
+    ok: true,
+    total_lineas: lineas.length,
+    total_items_detectados: items.length,
+    iva,
+    items
+  };
+}
+
+export async function analizarImportacionEMC({ body = {}, openai = null }) {
+  const proveedor = normalizarProveedor(body.proveedor, body);
+
+  const archivos = Array.isArray(body.archivos) ? body.archivos : [];
+  const textos = [];
+  const multimedia = [];
+  const archivosProcesados = [];
+
+  if (body.texto_extraido || body.texto || body.csv) {
+    textos.push(String(body.texto_extraido || body.texto || body.csv || ""));
+    archivosProcesados.push({
+      nombre: body.file_name || body.nombre_archivo || "texto_manual",
+      mime: body.file_mime || body.mime_type || "text/plain",
+      tipo: "texto"
+    });
+  }
+
+  for (const archivo of archivos) {
+    const tipo = detectarMimeArchivo({
+      fileName: archivo.originalFilename,
+      mimeType: archivo.mimetype
+    });
+
+    try {
+      const extraido = await extraerTextoArchivo(archivo);
+
+      if (extraido.texto) textos.push(extraido.texto);
+      if (Array.isArray(extraido.multimedia)) multimedia.push(...extraido.multimedia);
+
+      archivosProcesados.push({
+        nombre: archivo.originalFilename || "archivo",
+        mime: archivo.mimetype || "",
+        size: archivo.size || 0,
+        tipo: extraido.tipo || tipo,
+        estado: "procesado"
+      });
+    } catch (error) {
+      archivosProcesados.push({
+        nombre: archivo.originalFilename || "archivo",
+        mime: archivo.mimetype || "",
+        size: archivo.size || 0,
+        tipo,
+        estado: "error",
+        error: error?.message || "No se pudo procesar el archivo"
+      });
+    }
+  }
+
+  let textoUnificado = textos.join("\n\n").trim();
+  let vision = null;
+
+  if (!textoUnificado && archivos.length) {
+    try {
+      vision = await analizarArchivosConVisionEMC({
+        archivos,
+        proveedor,
+        notas: body.notas || ""
+      });
+
+      if (vision?.texto) {
+        textoUnificado = String(vision.texto || "").trim();
+      }
+    } catch (error) {
+      vision = {
+        ok: false,
+        error: error?.message || "No se pudo ejecutar visión EMC"
+      };
+    }
+  }
+
+  if (!textoUnificado && !multimedia.length) {
+    return {
+      ok: false,
+      estado: "sin_contenido_extraible",
+      proveedor,
+      archivos: archivosProcesados,
+      vision,
+      mensaje: "CORE recibió archivos, pero no pudo extraer texto útil para EMC.",
+      siguiente_paso: "Subir PDF con texto seleccionable, Excel, CSV o TXT. Las imágenes quedan para OCR/visión en fase siguiente."
+    };
+  }
+
+  const propuesta = textoUnificado
+    ? procesarLineasCatalogo({ texto: textoUnificado, proveedor })
+    : {
+        ok: true,
+        total_lineas: 0,
+        total_items_detectados: 0,
+        iva: detectarIva(""),
+        items: []
+      };
+
+  return {
+    ok: true,
+    modo: archivos.length ? "analisis_archivos" : "analisis_texto",
+    proveedor,
+    tipo_proveedor: body.tipo_proveedor || "materiales",
+    modo_importacion: body.modo_importacion || "catalogo_mas_lista",
+    notas: body.notas || "",
+    archivos: archivosProcesados,
+    multimedia,
+    propuesta,
+    resumen: {
+      archivos_recibidos: archivos.length,
+      archivos_procesados: archivosProcesados.filter((a) => a.estado === "procesado").length,
+      archivos_error: archivosProcesados.filter((a) => a.estado === "error").length,
+      imagenes_pendientes_ocr: multimedia.length,
+      items_detectados: propuesta.items.length
+    },
+    siguiente_paso: "Revisar propuesta en ELANVISUAL antes de guardar en EMC."
+  };
+}
+
+
+### lib/emc-vision-engine.js ###
+
+import fs from "fs";
+import OpenAI from "openai";
+
+function limpiarJson(texto = "") {
+  return String(texto || "")
+    .replace(/^```json/i, "")
+    .replace(/^```/i, "")
+    .replace(/```$/i, "")
+    .trim();
+}
+
+export async function analizarArchivosConVisionEMC({ archivos = [], proveedor = {}, notas = "" }) {
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      ok: false,
+      texto: "",
+      items: [],
+      error: "OPENAI_API_KEY no configurada"
+    };
+  }
+
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const archivosOpenAI = [];
+
+  for (const archivo of archivos) {
+    if (!archivo?.filepath) continue;
+
+    const uploaded = await client.files.create({
+      file: fs.createReadStream(archivo.filepath),
+      purpose: "assistants"
+    });
+
+    archivosOpenAI.push({
+      file_id: uploaded.id,
+      nombre: archivo.originalFilename || "archivo"
+    });
+  }
+
+  if (!archivosOpenAI.length) {
+    return {
+      ok: false,
+      texto: "",
+      items: [],
+      error: "No hay archivos válidos para visión"
+    };
+  }
+
+  const content = [
+    {
+      type: "input_text",
+      text: `
+Analizá estos documentos de proveedor para el Catálogo Maestro EMC de ELANKAV.
+
+Proveedor:
+${JSON.stringify(proveedor, null, 2)}
+
+Notas internas:
+${notas || ""}
+
+Objetivo:
+Extraer productos, familias, marcas, medidas, unidades y precios visibles.
+Si el documento es catálogo visual, extraé productos aunque estén en imágenes.
+Si el documento es lista de precios, extraé líneas con precio.
+
+Respondé SOLO JSON válido con esta estructura:
+{
+  "texto_extraido": "texto consolidado útil",
+  "items": [
+    {
+      "codigo": "",
+      "nombre": "",
+      "descripcion_original": "",
+      "categoria_sugerida": "",
+      "subcategoria_sugerida": "",
+      "marca_sugerida": "",
+      "unidad_sugerida": "",
+      "medida_detectada": null,
+      "precio_detectado": null,
+      "moneda_sugerida": "NIO",
+      "requiere_revision": true
+    }
+  ]
+}
+`
+    },
+    ...archivosOpenAI.map((a) => ({
+      type: "input_file",
+      file_id: a.file_id
+    }))
+  ];
+
+  const response = await client.responses.create({
+    model: "gpt-4.1-mini",
+    input: [
+      {
+        role: "user",
+        content
+      }
+    ]
+  });
+
+  const raw = response.output_text || "";
+
+  try {
+    const json = JSON.parse(limpiarJson(raw));
+
+    return {
+      ok: true,
+      texto: json.texto_extraido || "",
+      items: Array.isArray(json.items) ? json.items : [],
+      raw
+    };
+  } catch (error) {
+    return {
+      ok: true,
+      texto: raw,
+      items: [],
+      raw,
+      parse_error: error.message
+    };
+  }
+}
+
+
+### lib/emc-save-engine.js ###
+
+function assertRes(res, paso) {
+  if (res.error) throw new Error(`${paso}: ${res.error.message}`);
+  return res.data;
+}
+
+function limpio(valor, fallback) {
+  const v = String(valor || "").trim();
+  return v || fallback;
+}
+
+function estadoTexto(valor, fallback = "ACTIVO") {
+  return String(valor || fallback).trim().toUpperCase();
+}
+
+function slugCodigo(valor = "", prefijo = "EMC") {
+  const base = String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+
+  return `${prefijo}_${base || "GENERAL"}`;
+}
+
+async function buscarOCrearPorNombre(supabase, tabla, nombre, extra = {}) {
+  let { data, error } = await supabase
+    .from(tabla)
+    .select("*")
+    .eq("nombre", nombre)
+    .maybeSingle();
+
+  if (error) throw new Error(`${tabla}: ${error.message}`);
+
+  if (!data) {
+    data = assertRes(
+      await supabase
+        .from(tabla)
+        .insert({
+          nombre,
+          ...extra,
+        })
+        .select()
+        .single(),
+      `Crear ${tabla}`
+    );
+  }
+
+  return data;
+}
+
+export async function guardarEMC(body, supabase) {
+  const items = Array.isArray(body.items) ? body.items : [];
+  const proveedor = body.proveedor || null;
+
+  const resultado = {
+    ok: true,
+    creados: 0,
+    actualizados: 0,
+    precios_creados: 0,
+    precios_actualizados: 0,
+    errores: [],
+  };
+
+  for (const item of items) {
+    try {
+      const categoriaNombre = limpio(item.categoria_sugerida, "General");
+      const subcategoriaNombre = limpio(item.subcategoria_sugerida, "Sin clasificar");
+      const unidadNombre = limpio(item.unidad_sugerida, "unidad");
+      const tipoItemNombre = limpio(item.tipo_item_sugerido, "Material");
+      const marcaNombre = limpio(item.marca_sugerida, "");
+
+      const codigo = limpio(
+        item.codigo,
+        `EMC-${Date.now()}-${resultado.creados + resultado.actualizados + 1}`
+      );
+
+      const nombre = limpio(item.nombre, codigo);
+      const descripcion = limpio(item.descripcion_original, nombre);
+      const medidaTexto = item.medida_detectada?.texto || null;
+      const precio = Number(item.precio_detectado || 0);
+      const incluyeIva = item.iva_detectado?.incluido === true;
+      const ivaPorcentaje = Number(item.iva_detectado?.porcentaje || 15);
+      const proveedor_id = proveedor?.id || item.proveedor_id || null;
+
+      const categoria = await buscarOCrearPorNombre(
+        supabase,
+        "elankav_catalogo_categorias",
+        categoriaNombre,
+        {
+          codigo: slugCodigo(categoriaNombre, "EMC_CAT"),
+          activo: true,
+        }
+      );
+
+      let { data: subcategoria, error: subError } = await supabase
+        .from("elankav_catalogo_subcategorias")
+        .select("*")
+        .eq("nombre", subcategoriaNombre)
+        .eq("categoria_id", categoria.id)
+        .maybeSingle();
+
+      if (subError) throw new Error(`Subcategoría: ${subError.message}`);
+
+      if (!subcategoria) {
+        subcategoria = assertRes(
+          await supabase
+            .from("elankav_catalogo_subcategorias")
+            .insert({
+              codigo: slugCodigo(`${categoriaNombre}_${subcategoriaNombre}`, "EMC_SUB"),
+              nombre: subcategoriaNombre,
+              categoria_id: categoria.id,
+              activo: true,
+            })
+            .select()
+            .single(),
+          "Crear subcategoría"
+        );
+      }
+
+      const unidad = await buscarOCrearPorNombre(
+        supabase,
+        "elankav_catalogo_unidades",
+        unidadNombre
+      );
+
+      const tipoItem = await buscarOCrearPorNombre(
+        supabase,
+        "elankav_catalogo_tipos_item",
+        tipoItemNombre,
+        {
+          codigo: slugCodigo(tipoItemNombre, "EMC_TIPO"),
+          activo: true,
+        }
+      );
+
+      let marca = null;
+      if (marcaNombre) {
+        marca = await buscarOCrearPorNombre(
+          supabase,
+          "elankav_catalogo_marcas",
+          marcaNombre
+        );
+      }
+
+      let { data: existing, error: itemError } = await supabase
+        .from("elankav_catalogo_items")
+        .select("*")
+        .eq("codigo", codigo)
+        .maybeSingle();
+
+      if (itemError) throw new Error(`Buscar item: ${itemError.message}`);
+
+      const payloadItem = {
+        codigo,
+        nombre,
+        categoria_id: categoria.id,
+        subcategoria_id: subcategoria.id,
+        tipo_item_id: tipoItem.id,
+        unidad_base_id: unidad.id,
+        descripcion,
+        medida_texto: medidaTexto,
+        unidad_calculo: estadoTexto(unidadNombre, "UNIDAD"),
+        uso: "COMPRA",
+        es_compartido: true,
+        estado: "ACTIVO",
+        activo: true,
+      };
+
+      let item_id;
+
+      if (!existing) {
+        const nuevo = assertRes(
+          await supabase
+            .from("elankav_catalogo_items")
+            .insert(payloadItem)
+            .select()
+            .single(),
+          "Crear item"
+        );
+
+        item_id = nuevo.id;
+        resultado.creados++;
+      } else {
+        const actualizado = assertRes(
+          await supabase
+            .from("elankav_catalogo_items")
+            .update(payloadItem)
+            .eq("id", existing.id)
+            .select()
+            .single(),
+          "Actualizar item"
+        );
+
+        item_id = actualizado.id;
+        resultado.actualizados++;
+      }
+
+      if (proveedor_id) {
+        const { data: proveedorItem, error: piError } = await supabase
+          .from("elankav_catalogo_proveedor_items")
+          .select("*")
+          .eq("item_id", item_id)
+          .eq("proveedor_id", proveedor_id)
+          .maybeSingle();
+
+        if (piError) throw new Error(`Buscar proveedor item: ${piError.message}`);
+
+        const payloadProveedorItem = {
+          item_id,
+          proveedor_id,
+          marca_id: marca?.id || null,
+          unidad_compra_id: unidad.id,
+          codigo_catalogo: codigo,
+          nombre_catalogo: nombre,
+          presentacion: medidaTexto || unidadNombre,
+          precio_lista: precio,
+          incluye_iva: incluyeIva,
+          iva_porcentaje: ivaPorcentaje,
+          precio_confirmado: false,
+estado_informacion: precio > 0 ? "COMPLETO" : "SIN_PRECIO",          usar_presupuesto: false,
+          prioridad_compra: 1,
+          unidades_por_presentacion: 1,
+          costo_unitario: precio,
+          ultima_verificacion: new Date().toISOString().slice(0, 10),
+          activo: true,
+          observaciones: descripcion,
+        };
+
+        if (proveedorItem) {
+          assertRes(
+            await supabase
+              .from("elankav_catalogo_proveedor_items")
+              .update(payloadProveedorItem)
+              .eq("id", proveedorItem.id)
+              .select()
+              .single(),
+            "Actualizar precio proveedor"
+          );
+
+          resultado.precios_actualizados++;
+        } else {
+          assertRes(
+            await supabase
+              .from("elankav_catalogo_proveedor_items")
+              .insert(payloadProveedorItem)
+              .select()
+              .single(),
+            "Crear precio proveedor"
+          );
+
+          resultado.precios_creados++;
+        }
+      }
+    } catch (error) {
+      resultado.ok = false;
+      resultado.errores.push({
+        item: item.codigo || item.nombre || "sin_codigo",
+        error: error.message,
+      });
+    }
+  }
+
+  return resultado;
+}
