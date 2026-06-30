@@ -55,11 +55,7 @@ function safeRequire(modulePath) {
 }
 
 async function safeImport(modulePath) {
-  try {
-    return await import(modulePath);
-  } catch {
-    return safeRequire(modulePath);
-  }
+  return await import(modulePath);
 }
 
 async function readRawBody(req) {
@@ -520,3 +516,4 @@ async function handler(req, res) {
 }
 
 export default handler;
+
