@@ -1,231 +1,431 @@
-﻿import { guardarEMC } from "../lib/emc-save-engine.js";
-import OpenAI from "openai";
-import formidable from "formidable";
-import { crearClienteSupabase } from "../lib/memoria-operativa.js";
+﻿/* eslint-disable no-console */
 
-export const config = {
+const fs = require("fs");
+const path = require("path");
+
+module.exports.config = {
   api: {
-    bodyParser: false
-  }
+    bodyParser: false,
+  },
 };
 
-let supabase;
+const JOBS = global.__EMC_VISION_JOBS__ || new Map();
+global.__EMC_VISION_JOBS__ = JOBS;
 
-try {
-  supabase = crearClienteSupabase();
-} catch {
-  supabase = null;
+function nowISO() {
+  return new Date().toISOString();
 }
 
-const allowedOrigins = [
-  "https://visual.elankav.com",
-  "https://elanvisual-platform.vercel.app",
-  "https://elankav-core.vercel.app",
-  "http://localhost:5173",
-  "http://localhost:5174"
-];
-
-function setCors(req, res) {
-  const origin = req.headers.origin || "";
-  const allowOrigin = allowedOrigins.includes(origin)
-    ? origin
-    : "https://visual.elankav.com";
-
-  res.setHeader("Access-Control-Allow-Origin", allowOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Vary", "Origin");
+function json(res, status, payload) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(payload));
 }
 
-function esMultipart(req) {
-  return String(req.headers["content-type"] || "").includes("multipart/form-data");
+function safeRequire(modulePath) {
+  try {
+    return require(modulePath);
+  } catch (error) {
+    return null;
+  }
 }
 
-function leerBodyRaw(req) {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (chunk) => {
-      data += chunk;
-    });
-    req.on("end", () => resolve(data));
+async function readRawBody(req) {
+  return await new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
 }
 
-async function leerBodyJson(req) {
-  const raw = await leerBodyRaw(req);
+async function parseJsonOrText(req) {
+  const raw = await readRawBody(req);
+  const text = raw.toString("utf8");
+
+  if (!text.trim()) return {};
 
   try {
-    return JSON.parse(raw || "{}");
+    return JSON.parse(text);
   } catch {
-    return {};
+    return { texto: text };
   }
 }
 
-function valorCampo(valor) {
-  if (Array.isArray(valor)) return valor[0];
-  return valor;
-}
+async function parseMultipart(req) {
+  const formidableModule = safeRequire("formidable");
 
-function normalizarFiles(files = {}) {
-  const salida = [];
+  if (!formidableModule) {
+    throw new Error("Multipart recibido, pero formidable no está disponible.");
+  }
 
-  Object.values(files || {}).forEach((valor) => {
-    if (Array.isArray(valor)) salida.push(...valor);
-    else if (valor) salida.push(valor);
-  });
+  const formidable =
+    typeof formidableModule === "function"
+      ? formidableModule
+      : formidableModule.formidable;
 
-  return salida;
-}
-
-function leerBodyMultipart(req) {
-  return new Promise((resolve, reject) => {
+  return await new Promise((resolve, reject) => {
     const form = formidable({
-      multiples: true,
+      multiples: false,
       keepExtensions: true,
-      maxFileSize: 25 * 1024 * 1024,
-      maxTotalFileSize: 40 * 1024 * 1024
+      maxFileSize: 80 * 1024 * 1024,
     });
 
     form.parse(req, (error, fields, files) => {
       if (error) return reject(error);
 
-      const body = {};
-
+      const normalizedFields = {};
       Object.entries(fields || {}).forEach(([key, value]) => {
-        const limpio = valorCampo(value);
-
-        if (key === "proveedor") {
-          try {
-            body.proveedor = JSON.parse(limpio || "{}");
-          } catch {
-            body.proveedor = {};
-          }
-        } else {
-          body[key] = limpio;
-        }
+        normalizedFields[key] = Array.isArray(value) ? value[0] : value;
       });
 
-      body.archivos = normalizarFiles(files);
-      resolve(body);
+      const normalizedFiles = {};
+      Object.entries(files || {}).forEach(([key, value]) => {
+        normalizedFiles[key] = Array.isArray(value) ? value[0] : value;
+      });
+
+      resolve({
+        ...normalizedFields,
+        files: normalizedFiles,
+      });
     });
   });
 }
 
-async function leerBody(req) {
-  if (esMultipart(req)) return leerBodyMultipart(req);
-  return leerBodyJson(req);
+async function parseRequest(req) {
+  const contentType = String(req.headers["content-type"] || "").toLowerCase();
+
+  if (contentType.includes("multipart/form-data")) {
+    return await parseMultipart(req);
+  }
+
+  return await parseJsonOrText(req);
 }
 
-async function manejarGuardarEMC(body, supabaseClient) {
-  try {
-    if (!supabaseClient) {
-      return {
-        ok: false,
-        error: "Supabase no inicializado en CORE",
-        errores: [{ item: "CORE", error: "Supabase no inicializado en CORE" }]
-      };
+function getUploadedFile(payload) {
+  const files = payload.files || {};
+  return (
+    files.archivo ||
+    files.file ||
+    files.pdf ||
+    files.documento ||
+    files.catalogo ||
+    null
+  );
+}
+
+function getFilePath(file) {
+  return file?.filepath || file?.path || null;
+}
+
+function normalizeTipo(payload) {
+  return String(payload.tipo || payload.action || payload.accion || "")
+    .trim()
+    .toLowerCase();
+}
+
+async function callFirstAvailable(mod, names, args) {
+  if (!mod) return null;
+
+  for (const name of names) {
+    if (typeof mod[name] === "function") {
+      return await mod[name](...args);
     }
+  }
 
-    const resultado = await guardarEMC(body, supabaseClient);
+  if (typeof mod === "function") {
+    return await mod(...args);
+  }
 
-    return {
-      ok: resultado.ok,
-      version: "AI-19-EMC",
-      creados: resultado.creados || 0,
-      actualizados: resultado.actualizados || 0,
-      precios_creados: resultado.precios_creados || 0,
-      precios_actualizados: resultado.precios_actualizados || 0,
-      errores: resultado.errores || [],
-      resultado
-    };
+  return null;
+}
+
+function createLocalJob(payload) {
+  const jobId =
+    "emc_job_" +
+    Date.now().toString(36) +
+    "_" +
+    Math.random().toString(36).slice(2, 8);
+
+  const job = {
+    id: jobId,
+    tipo: "emc-vision-import-v2",
+    estado: "pendiente",
+    proveedor_id: payload.proveedor_id || payload.proveedorId || null,
+    proveedor_nombre: payload.proveedor_nombre || payload.proveedor || null,
+    archivo_nombre: null,
+    pagina_actual: 0,
+    paginas_total: 0,
+    porcentaje: 0,
+    productos_detectados: 0,
+    productos_guardados: 0,
+    errores: 0,
+    errores_detalle: [],
+    tiempo_estimado_segundos: null,
+    iniciado_en: nowISO(),
+    actualizado_en: nowISO(),
+    finalizado_en: null,
+  };
+
+  const file = getUploadedFile(payload);
+  if (file) {
+    job.archivo_nombre = file.originalFilename || file.newFilename || null;
+    job.archivo_path = getFilePath(file);
+    job.mime = file.mimetype || file.type || null;
+  }
+
+  JOBS.set(jobId, job);
+  return job;
+}
+
+function updateJob(jobId, patch) {
+  const previous = JOBS.get(jobId);
+  if (!previous) return null;
+
+  const next = {
+    ...previous,
+    ...patch,
+    actualizado_en: nowISO(),
+  };
+
+  JOBS.set(jobId, next);
+  return next;
+}
+
+async function runVisionJobInBackground(jobId, payload) {
+  const jobEngine = safeRequire("../lib/emc/job-engine.js");
+
+  updateJob(jobId, {
+    estado: "procesando",
+  });
+
+  try {
+    const result = await callFirstAvailable(
+      jobEngine,
+      [
+        "procesarJobEMCVision",
+        "procesarJob",
+        "runJob",
+        "startJob",
+        "processJob",
+        "default",
+      ],
+      [
+        {
+          jobId,
+          payload,
+          updateProgress: (patch) => updateJob(jobId, patch),
+          getJob: () => JOBS.get(jobId),
+        },
+      ]
+    );
+
+    if (result) {
+      updateJob(jobId, {
+        ...result,
+        estado: result.estado || "finalizado",
+        porcentaje: result.porcentaje ?? 100,
+        finalizado_en: nowISO(),
+      });
+    } else {
+      updateJob(jobId, {
+        estado: "finalizado",
+        porcentaje: 100,
+        finalizado_en: nowISO(),
+      });
+    }
   } catch (error) {
-    console.error("guardar-emc error:", error);
+    const current = JOBS.get(jobId);
 
-    return {
-      ok: false,
-      error: error.message,
-      errores: [{ item: "CORE", error: error.message }]
-    };
+    updateJob(jobId, {
+      estado: "finalizado_con_errores",
+      errores: Number(current?.errores || 0) + 1,
+      errores_detalle: [
+        ...(current?.errores_detalle || []),
+        {
+          pagina: current?.pagina_actual || null,
+          mensaje: error.message,
+          fecha: nowISO(),
+        },
+      ],
+      finalizado_en: nowISO(),
+    });
   }
 }
 
-export default async function handler(req, res) {
-  setCors(req, res);
+async function handleCrearJobEMC(req, res, payload) {
+  const jobEngine = safeRequire("../lib/emc/job-engine.js");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).json({ ok: true });
-  }
+  const externalJob = await callFirstAvailable(
+    jobEngine,
+    ["crearJobEMC", "crearJob", "createEmcJob", "createJob"],
+    [payload]
+  );
 
-  if (req.method === "GET") {
-    return res.status(200).json({
-      ok: true,
-      service: "ELANKAV CORE AI",
-      endpoint: "/api/elan-ai",
-      status: "online",
-      version: "AI-19-MULTIPART-EMC",
-      soporta: ["chat", "render-botones", "importar-emc", "guardar-emc"]
+  const job = externalJob?.id ? externalJob : createLocalJob(payload);
+  JOBS.set(job.id, { ...createLocalJob({}), ...job, id: job.id });
+
+  runVisionJobInBackground(job.id, payload);
+
+  return json(res, 200, {
+    ok: true,
+    tipo: "crear-job-emc",
+    job_id: job.id,
+    job,
+  });
+}
+
+async function handleEstadoJobEMC(req, res, payload) {
+  const jobId = payload.job_id || payload.jobId || payload.id;
+
+  if (!jobId) {
+    return json(res, 400, {
+      ok: false,
+      error: "Falta job_id.",
     });
   }
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Método no permitido" });
+  const jobEngine = safeRequire("../lib/emc/job-engine.js");
+
+  const externalStatus = await callFirstAvailable(
+    jobEngine,
+    ["estadoJobEMC", "obtenerEstadoJob", "getJobStatus", "getJob"],
+    [jobId]
+  );
+
+  const job = externalStatus || JOBS.get(jobId);
+
+  if (!job) {
+    return json(res, 404, {
+      ok: false,
+      error: "Job EMC no encontrado.",
+      job_id: jobId,
+    });
   }
 
-  try {
-    const body = await leerBody(req);
-    const tipo = String(body.tipo || "").trim();
+  return json(res, 200, {
+    ok: true,
+    tipo: "estado-job-emc",
+    job_id: jobId,
+    job,
+  });
+}
 
-    if (!tipo) {
-      return res.status(400).json({
-        ok: false,
-        error: "Tipo de solicitud requerido",
-        recibido: {
-          multipart: esMultipart(req),
-          keys: Object.keys(body || {}),
-          archivos: Array.isArray(body.archivos) ? body.archivos.length : 0
-        }
+async function handleImportarEMC(req, res, payload) {
+  const importEngine = safeRequire("../lib/emc-import-engine.js");
+
+  const result = await callFirstAvailable(
+    importEngine,
+    [
+      "importarEMC",
+      "importarCatalogoEMC",
+      "procesarImportacionEMC",
+      "processEMCImport",
+      "default",
+    ],
+    [payload]
+  );
+
+  if (!result) {
+    return json(res, 500, {
+      ok: false,
+      error: "No se encontró función compatible en lib/emc-import-engine.js",
+    });
+  }
+
+  return json(res, 200, {
+    ok: true,
+    tipo: "importar-emc",
+    ...result,
+  });
+}
+
+async function handleGuardarEMC(req, res, payload) {
+  const saveEngine = safeRequire("../lib/emc-save-engine.js");
+
+  const result = await callFirstAvailable(
+    saveEngine,
+    [
+      "guardarEMC",
+      "guardarCatalogoEMC",
+      "guardarItemsEMC",
+      "saveEMC",
+      "saveEMCItems",
+      "default",
+    ],
+    [payload]
+  );
+
+  if (!result) {
+    return json(res, 500, {
+      ok: false,
+      error: "No se encontró función compatible en lib/emc-save-engine.js",
+    });
+  }
+
+  return json(res, 200, {
+    ok: true,
+    tipo: "guardar-emc",
+    ...result,
+  });
+}
+
+async function handler(req, res) {
+  try {
+    if (req.method === "GET") {
+      return json(res, 200, {
+        ok: true,
+        service: "ELANKAV CORE AI",
+        status: "online",
+        version: "AI-20 EMC Vision Import v2",
       });
     }
 
-    if (tipo === "render-botones") {
-      return res.status(200).json({ ok: true, message: "ok render" });
+    if (req.method !== "POST") {
+      return json(res, 405, {
+        ok: false,
+        error: "Método no permitido.",
+      });
+    }
+
+    const payload = await parseRequest(req);
+    const tipo = normalizeTipo(payload);
+
+    if (tipo === "crear-job-emc") {
+      return await handleCrearJobEMC(req, res, payload);
+    }
+
+    if (tipo === "estado-job-emc") {
+      return await handleEstadoJobEMC(req, res, payload);
     }
 
     if (tipo === "importar-emc") {
-      const { analizarImportacionEMC } = await import("../lib/emc-import-engine.js");
-      const resultado = await analizarImportacionEMC({ body });
-      return res.status(resultado.ok ? 200 : 400).json(resultado);
+      return await handleImportarEMC(req, res, payload);
     }
 
     if (tipo === "guardar-emc") {
-      const resultado = await manejarGuardarEMC(body, supabase);
-      return res.status(resultado.ok ? 200 : 400).json(resultado);
+      return await handleGuardarEMC(req, res, payload);
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ ok: false, error: "OPENAI_API_KEY missing" });
-    }
-
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const response = await client.responses.create({
-      model: "gpt-4.1-mini",
-      input: [{ role: "user", content: JSON.stringify(body) }]
-    });
-
-    return res.status(200).json({
-      ok: true,
-      respuesta: response.output_text
+    return json(res, 400, {
+      ok: false,
+      error: "Tipo no soportado en api/elan-ai.js",
+      tipo_recibido: tipo || null,
+      tipos_soportados: [
+        "importar-emc",
+        "guardar-emc",
+        "crear-job-emc",
+        "estado-job-emc",
+      ],
     });
   } catch (error) {
-    console.error("CORE ERROR:", error);
+    console.error("ERROR /api/elan-ai:", error);
 
-    return res.status(500).json({
+    return json(res, 500, {
       ok: false,
-      endpoint: "/api/elan-ai",
-      error: error.message
+      error: error.message || "Error interno en ELANKAV CORE.",
     });
   }
 }
+
+module.exports = handler;
