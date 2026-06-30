@@ -2,7 +2,6 @@
 import OpenAI from "openai";
 import formidable from "formidable";
 import { crearClienteSupabase } from "../lib/memoria-operativa.js";
-import { analizarImportacionEMC } from "../lib/emc-import-engine.js";
 
 export const config = {
   api: {
@@ -228,6 +227,7 @@ export default async function handler(req, res) {
     ===================== */
 
     if (tipo === "importar-emc") {
+      const { analizarImportacionEMC } = await import("../lib/emc-import-engine.js");
       const resultado = await analizarImportacionEMC({ body });
       return res.status(resultado.ok ? 200 : 400).json(resultado);
     }
