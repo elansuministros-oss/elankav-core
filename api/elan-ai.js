@@ -16,26 +16,26 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
 ]);
 
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  "";
+
+const EMC_BUCKET = "emc-importaciones";
+
 function nowISO() {
   return new Date().toISOString();
 }
 
 function applyCors(req, res) {
   const origin = req.headers.origin || "";
-
-  if (ALLOWED_ORIGINS.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", "https://visual.elankav.com");
-  }
-
+  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGINS.has(origin) ? origin : "https://visual.elankav.com");
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With, Accept, Origin"
-  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
   res.setHeader("Access-Control-Max-Age", "86400");
 }
 
@@ -54,6 +54,14 @@ function safeRequire(modulePath) {
   }
 }
 
+async function safeImport(modulePath) {
+  try {
+    return await import(modulePath);
+  } catch {
+    return safeRequire(modulePath);
+  }
+}
+
 async function readRawBody(req) {
   return await new Promise((resolve, reject) => {
     const chunks = [];
@@ -66,9 +74,7 @@ async function readRawBody(req) {
 async function parseJsonOrText(req) {
   const raw = await readRawBody(req);
   const text = raw.toString("utf8");
-
   if (!text.trim()) return {};
-
   try {
     return JSON.parse(text);
   } catch {
@@ -78,15 +84,9 @@ async function parseJsonOrText(req) {
 
 async function parseMultipart(req) {
   const formidableModule = safeRequire("formidable");
+  if (!formidableModule) throw new Error("Multipart recibido, pero formidable no está disponible.");
 
-  if (!formidableModule) {
-    throw new Error("Multipart recibido, pero formidable no está disponible.");
-  }
-
-  const formidable =
-    typeof formidableModule === "function"
-      ? formidableModule
-      : formidableModule.formidable;
+  const formidable = typeof formidableModule === "function" ? formidableModule : formidableModule.formidable;
 
   return await new Promise((resolve, reject) => {
     const form = formidable({
@@ -108,68 +108,195 @@ async function parseMultipart(req) {
         normalizedFiles[key] = Array.isArray(value) ? value[0] : value;
       });
 
-      resolve({
-        ...normalizedFields,
-        files: normalizedFiles,
-      });
+      resolve({ ...normalizedFields, files: normalizedFiles });
     });
   });
 }
 
 async function parseRequest(req) {
   const contentType = String(req.headers["content-type"] || "").toLowerCase();
-
-  if (contentType.includes("multipart/form-data")) {
-    return await parseMultipart(req);
-  }
-
+  if (contentType.includes("multipart/form-data")) return await parseMultipart(req);
   return await parseJsonOrText(req);
 }
 
-function getUploadedFile(payload) {
+function normalizeTipo(payload = {}) {
+  return String(payload.tipo || payload.action || payload.accion || "").trim().toLowerCase();
+}
+
+function getUploadedFile(payload = {}) {
   const files = payload.files || {};
-  return (
-    files.archivo ||
-    files.file ||
-    files.pdf ||
-    files.documento ||
-    files.catalogo ||
-    null
-  );
+  return files.archivo || files.file || files.pdf || files.documento || files.catalogo || null;
 }
 
 function getFilePath(file) {
   return file?.filepath || file?.path || null;
 }
 
-function normalizeTipo(payload) {
-  return String(payload.tipo || payload.action || payload.accion || "")
-    .trim()
-    .toLowerCase();
+function cleanStoragePath(value = "") {
+  let path = String(value || "").trim();
+  if (!path) return "";
+
+  path = path.replace(/^\/+/, "");
+  path = path.replace(/^emc-importaciones\/+/, "");
+
+  return path;
+}
+
+function getStoragePathFromPayload(payload = {}) {
+  const file = getUploadedFile(payload);
+
+  return cleanStoragePath(
+    payload.storage_path ||
+      payload.storagePath ||
+      payload.archivo_path ||
+      payload.archivoPath ||
+      payload.path ||
+      payload.ruta ||
+      payload.url_storage ||
+      payload.storageUrl ||
+      file?.storage_path ||
+      file?.storagePath ||
+      file?.path_storage ||
+      file?.archivo_path ||
+      ""
+  );
+}
+
+function getArchivoNombre(payload = {}) {
+  const file = getUploadedFile(payload);
+
+  return (
+    payload.originalFilename ||
+    payload.originalname ||
+    payload.fileName ||
+    payload.filename ||
+    payload.nombre_archivo ||
+    payload.archivo_nombre ||
+    file?.originalFilename ||
+    file?.originalname ||
+    file?.newFilename ||
+    file?.name ||
+    "catalogo-emc.pdf"
+  );
+}
+
+function getArchivoMime(payload = {}) {
+  const file = getUploadedFile(payload);
+
+  return (
+    payload.mimetype ||
+    payload.mimeType ||
+    payload.mime ||
+    payload.file_mime ||
+    payload.mime_type ||
+    file?.mimetype ||
+    file?.type ||
+    "application/pdf"
+  );
+}
+
+async function downloadStorageBuffer(storagePath) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("Supabase no configurado en CORE para descargar Storage.");
+  }
+
+  const path = cleanStoragePath(storagePath);
+  if (!path) throw new Error("Falta storage_path del archivo EMC.");
+
+  const url = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${EMC_BUCKET}/${encodeURI(path).replace(/%2F/g, "/")}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`No se pudo descargar archivo de Storage: ${response.status} ${errorText}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function prepararArchivosParaImportacion(payload = {}) {
+  const archivos = [];
+
+  const multipartFile = getUploadedFile(payload);
+  const multipartPath = getFilePath(multipartFile);
+
+  if (multipartFile && multipartPath) {
+    archivos.push({
+      originalFilename: getArchivoNombre(payload),
+      mimetype: getArchivoMime(payload),
+      filepath: multipartPath,
+      size: multipartFile.size || 0,
+      origen: "multipart",
+    });
+  }
+
+  const storagePath = getStoragePathFromPayload(payload);
+
+  if (storagePath) {
+    const buffer = await downloadStorageBuffer(storagePath);
+
+    archivos.push({
+      originalFilename: getArchivoNombre(payload),
+      mimetype: getArchivoMime(payload),
+      buffer,
+      size: buffer.length,
+      storage_path: storagePath,
+      origen: "supabase_storage",
+    });
+  }
+
+  if (Array.isArray(payload.archivos)) {
+    for (const item of payload.archivos) {
+      const itemStoragePath = cleanStoragePath(
+        item.storage_path || item.storagePath || item.archivo_path || item.path || item.ruta || ""
+      );
+
+      if (itemStoragePath) {
+        const buffer = await downloadStorageBuffer(itemStoragePath);
+
+        archivos.push({
+          ...item,
+          originalFilename:
+            item.originalFilename || item.originalname || item.fileName || item.filename || item.nombre || getArchivoNombre(payload),
+          mimetype: item.mimetype || item.mimeType || item.mime || getArchivoMime(payload),
+          buffer,
+          size: buffer.length,
+          storage_path: itemStoragePath,
+          origen: "supabase_storage",
+        });
+      } else {
+        archivos.push(item);
+      }
+    }
+  }
+
+  return archivos;
 }
 
 async function callFirstAvailable(mod, names, args) {
   if (!mod) return null;
 
   for (const name of names) {
-    if (typeof mod[name] === "function") {
-      return await mod[name](...args);
-    }
+    if (typeof mod[name] === "function") return await mod[name](...args);
   }
 
-  if (typeof mod === "function") {
-    return await mod(...args);
-  }
+  if (typeof mod.default === "function") return await mod.default(...args);
+  if (typeof mod === "function") return await mod(...args);
 
   return null;
 }
 
 function createLocalJob(payload = {}) {
-  const jobId =
-    "emc_job_" +
-    Date.now().toString(36) +
-    "_" +
-    Math.random().toString(36).slice(2, 8);
+  const jobId = "emc_job_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+
+  const file = getUploadedFile(payload);
 
   const job = {
     id: jobId,
@@ -177,9 +304,9 @@ function createLocalJob(payload = {}) {
     estado: "pendiente",
     proveedor_id: payload.proveedor_id || payload.proveedorId || null,
     proveedor_nombre: payload.proveedor_nombre || payload.proveedor || null,
-    archivo_nombre: null,
-    archivo_path: null,
-    mime: null,
+    archivo_nombre: file?.originalFilename || file?.newFilename || getArchivoNombre(payload),
+    archivo_path: getFilePath(file) || getStoragePathFromPayload(payload) || null,
+    mime: file?.mimetype || file?.type || getArchivoMime(payload),
     pagina_actual: 0,
     paginas_total: 0,
     porcentaje: 0,
@@ -193,14 +320,6 @@ function createLocalJob(payload = {}) {
     finalizado_en: null,
   };
 
-  const file = getUploadedFile(payload);
-
-  if (file) {
-    job.archivo_nombre = file.originalFilename || file.newFilename || null;
-    job.archivo_path = getFilePath(file);
-    job.mime = file.mimetype || file.type || null;
-  }
-
   JOBS.set(jobId, job);
   return job;
 }
@@ -209,58 +328,29 @@ function updateJob(jobId, patch) {
   const previous = JOBS.get(jobId);
   if (!previous) return null;
 
-  const next = {
-    ...previous,
-    ...patch,
-    actualizado_en: nowISO(),
-  };
-
+  const next = { ...previous, ...patch, actualizado_en: nowISO() };
   JOBS.set(jobId, next);
   return next;
 }
 
 async function runVisionJobInBackground(jobId, payload) {
-  const jobEngine = safeRequire("../lib/emc/job-engine.js");
+  const jobEngine = await safeImport("../lib/emc/job-engine.js");
 
-  updateJob(jobId, {
-    estado: "procesando",
-  });
+  updateJob(jobId, { estado: "procesando" });
 
   try {
     const result = await callFirstAvailable(
       jobEngine,
-      [
-        "procesarJobEMCVision",
-        "procesarJob",
-        "runJob",
-        "startJob",
-        "processJob",
-        "default",
-      ],
-      [
-        {
-          jobId,
-          payload,
-          updateProgress: (patch) => updateJob(jobId, patch),
-          getJob: () => JOBS.get(jobId),
-        },
-      ]
+      ["procesarJobEMCVision", "procesarJob", "runJob", "startJob", "processJob", "default"],
+      [{ jobId, payload, updateProgress: (patch) => updateJob(jobId, patch), getJob: () => JOBS.get(jobId) }]
     );
 
-    if (result) {
-      updateJob(jobId, {
-        ...result,
-        estado: result.estado || "finalizado",
-        porcentaje: result.porcentaje ?? 100,
-        finalizado_en: nowISO(),
-      });
-    } else {
-      updateJob(jobId, {
-        estado: "finalizado",
-        porcentaje: 100,
-        finalizado_en: nowISO(),
-      });
-    }
+    updateJob(jobId, {
+      ...(result || {}),
+      estado: result?.estado || "finalizado",
+      porcentaje: result?.porcentaje ?? 100,
+      finalizado_en: nowISO(),
+    });
   } catch (error) {
     const current = JOBS.get(jobId);
 
@@ -269,11 +359,7 @@ async function runVisionJobInBackground(jobId, payload) {
       errores: Number(current?.errores || 0) + 1,
       errores_detalle: [
         ...(current?.errores_detalle || []),
-        {
-          pagina: current?.pagina_actual || null,
-          mensaje: error.message,
-          fecha: nowISO(),
-        },
+        { pagina: current?.pagina_actual || null, mensaje: error.message, fecha: nowISO() },
       ],
       finalizado_en: nowISO(),
     });
@@ -281,21 +367,12 @@ async function runVisionJobInBackground(jobId, payload) {
 }
 
 async function handleCrearJobEMC(req, res, payload) {
-  const jobEngine = safeRequire("../lib/emc/job-engine.js");
+  const jobEngine = await safeImport("../lib/emc/job-engine.js");
 
-  const externalJob = await callFirstAvailable(
-    jobEngine,
-    ["crearJobEMC", "crearJob", "createEmcJob", "createJob"],
-    [payload]
-  );
-
+  const externalJob = await callFirstAvailable(jobEngine, ["crearJobEMC", "crearJob", "createEmcJob", "createJob"], [payload]);
   const job = externalJob?.id ? externalJob : createLocalJob(payload);
 
-  JOBS.set(job.id, {
-    ...job,
-    actualizado_en: nowISO(),
-  });
-
+  JOBS.set(job.id, { ...job, actualizado_en: nowISO() });
   runVisionJobInBackground(job.id, payload);
 
   return json(req, res, 200, {
@@ -310,28 +387,16 @@ async function handleEstadoJobEMC(req, res, payload) {
   const jobId = payload.job_id || payload.jobId || payload.id;
 
   if (!jobId) {
-    return json(req, res, 400, {
-      ok: false,
-      error: "Falta job_id.",
-    });
+    return json(req, res, 400, { ok: false, error: "Falta job_id." });
   }
 
-  const jobEngine = safeRequire("../lib/emc/job-engine.js");
-
-  const externalStatus = await callFirstAvailable(
-    jobEngine,
-    ["estadoJobEMC", "obtenerEstadoJob", "getJobStatus", "getJob"],
-    [jobId]
-  );
+  const jobEngine = await safeImport("../lib/emc/job-engine.js");
+  const externalStatus = await callFirstAvailable(jobEngine, ["estadoJobEMC", "obtenerEstadoJob", "getJobStatus", "getJob"], [jobId]);
 
   const job = externalStatus || JOBS.get(jobId);
 
   if (!job) {
-    return json(req, res, 404, {
-      ok: false,
-      error: "Job EMC no encontrado.",
-      job_id: jobId,
-    });
+    return json(req, res, 404, { ok: false, error: "Job EMC no encontrado.", job_id: jobId });
   }
 
   return json(req, res, 200, {
@@ -343,18 +408,19 @@ async function handleEstadoJobEMC(req, res, payload) {
 }
 
 async function handleImportarEMC(req, res, payload) {
-  const importEngine = safeRequire("../lib/emc-import-engine.js");
+  const importEngine = await safeImport("../lib/emc-import-engine.js");
+
+  const archivos = await prepararArchivosParaImportacion(payload);
+
+  const body = {
+    ...payload,
+    archivos,
+  };
 
   const result = await callFirstAvailable(
     importEngine,
-    [
-      "importarEMC",
-      "importarCatalogoEMC",
-      "procesarImportacionEMC",
-      "processEMCImport",
-      "default",
-    ],
-    [payload]
+    ["analizarImportacionEMC", "importarEMC", "importarCatalogoEMC", "procesarImportacionEMC", "processEMCImport", "default"],
+    [{ body }]
   );
 
   if (!result) {
@@ -365,25 +431,28 @@ async function handleImportarEMC(req, res, payload) {
   }
 
   return json(req, res, 200, {
-    ok: true,
+    ok: result.ok !== false,
     tipo: "importar-emc",
+    storage_descargado: archivos.some((a) => a.origen === "supabase_storage"),
+    archivos_preparados: archivos.map((a) => ({
+      nombre: a.originalFilename || a.name || "archivo",
+      mime: a.mimetype || a.mime || "",
+      size: a.size || 0,
+      origen: a.origen || "payload",
+      storage_path: a.storage_path || null,
+      tiene_buffer: Boolean(a.buffer),
+      tiene_filepath: Boolean(a.filepath),
+    })),
     ...result,
   });
 }
 
 async function handleGuardarEMC(req, res, payload) {
-  const saveEngine = safeRequire("../lib/emc-save-engine.js");
+  const saveEngine = await safeImport("../lib/emc-save-engine.js");
 
   const result = await callFirstAvailable(
     saveEngine,
-    [
-      "guardarEMC",
-      "guardarCatalogoEMC",
-      "guardarItemsEMC",
-      "saveEMC",
-      "saveEMCItems",
-      "default",
-    ],
+    ["guardarEMC", "guardarCatalogoEMC", "guardarItemsEMC", "saveEMC", "saveEMCItems", "default"],
     [payload]
   );
 
@@ -415,7 +484,7 @@ async function handler(req, res) {
         ok: true,
         service: "ELANKAV CORE AI",
         status: "online",
-        version: "AI-20 EMC Vision Import v2",
+        version: "AI-20 EMC Text Import Reset",
       });
     }
 
@@ -429,32 +498,16 @@ async function handler(req, res) {
     const payload = await parseRequest(req);
     const tipo = normalizeTipo(payload);
 
-    if (tipo === "crear-job-emc") {
-      return await handleCrearJobEMC(req, res, payload);
-    }
-
-    if (tipo === "estado-job-emc") {
-      return await handleEstadoJobEMC(req, res, payload);
-    }
-
-    if (tipo === "importar-emc") {
-      return await handleImportarEMC(req, res, payload);
-    }
-
-    if (tipo === "guardar-emc") {
-      return await handleGuardarEMC(req, res, payload);
-    }
+    if (tipo === "crear-job-emc") return await handleCrearJobEMC(req, res, payload);
+    if (tipo === "estado-job-emc") return await handleEstadoJobEMC(req, res, payload);
+    if (tipo === "importar-emc") return await handleImportarEMC(req, res, payload);
+    if (tipo === "guardar-emc") return await handleGuardarEMC(req, res, payload);
 
     return json(req, res, 400, {
       ok: false,
       error: "Tipo no soportado en api/elan-ai.js",
       tipo_recibido: tipo || null,
-      tipos_soportados: [
-        "importar-emc",
-        "guardar-emc",
-        "crear-job-emc",
-        "estado-job-emc",
-      ],
+      tipos_soportados: ["importar-emc", "guardar-emc", "crear-job-emc", "estado-job-emc"],
     });
   } catch (error) {
     console.error("ERROR /api/elan-ai:", error);
