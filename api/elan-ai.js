@@ -1,9 +1,11 @@
 ﻿/* eslint-disable no-console */
 
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
 module.exports.config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
 
 const JOBS = global.__EMC_VISION_JOBS__ || new Map();
@@ -22,13 +24,10 @@ function nowISO() {
 
 function applyCors(req, res) {
   const origin = req.headers.origin || "";
-
-  if (ALLOWED_ORIGINS.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", "https://visual.elankav.com");
-  }
-
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    ALLOWED_ORIGINS.has(origin) ? origin : "https://visual.elankav.com"
+  );
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -66,7 +65,6 @@ async function readRawBody(req) {
 async function parseJsonOrText(req) {
   const raw = await readRawBody(req);
   const text = raw.toString("utf8");
-
   if (!text.trim()) return {};
 
   try {
@@ -78,7 +76,6 @@ async function parseJsonOrText(req) {
 
 async function parseMultipart(req) {
   const formidableModule = safeRequire("formidable");
-
   if (!formidableModule) {
     throw new Error("Multipart recibido, pero formidable no está disponible.");
   }
@@ -90,7 +87,7 @@ async function parseMultipart(req) {
 
   return await new Promise((resolve, reject) => {
     const form = formidable({
-      multiples: false,
+      multiples: true,
       keepExtensions: true,
       maxFileSize: 80 * 1024 * 1024,
     });
@@ -107,6 +104,12 @@ async function parseMultipart(req) {
       Object.entries(files || {}).forEach(([key, value]) => {
         normalizedFiles[key] = Array.isArray(value) ? value[0] : value;
       });
+
+      if (typeof normalizedFields.proveedor === "string") {
+        try {
+          normalizedFields.proveedor = JSON.parse(normalizedFields.proveedor);
+        } catch {}
+      }
 
       resolve({
         ...normalizedFields,
@@ -126,10 +129,17 @@ async function parseRequest(req) {
   return await parseJsonOrText(req);
 }
 
+function normalizeTipo(payload) {
+  return String(payload.tipo || payload.action || payload.accion || "")
+    .trim()
+    .toLowerCase();
+}
+
 function getUploadedFile(payload) {
   const files = payload.files || {};
   return (
     files.archivo ||
+    files.archivos ||
     files.file ||
     files.pdf ||
     files.documento ||
@@ -142,10 +152,22 @@ function getFilePath(file) {
   return file?.filepath || file?.path || null;
 }
 
-function normalizeTipo(payload) {
-  return String(payload.tipo || payload.action || payload.accion || "")
-    .trim()
-    .toLowerCase();
+function getProveedorId(payload = {}) {
+  return (
+    payload.proveedor_id ||
+    payload.proveedorId ||
+    payload.proveedor?.id ||
+    null
+  );
+}
+
+function getProveedorNombre(payload = {}) {
+  return (
+    payload.proveedor_nombre ||
+    payload.proveedor?.nombre ||
+    payload.proveedor ||
+    null
+  );
 }
 
 async function callFirstAvailable(mod, names, args) {
@@ -164,6 +186,90 @@ async function callFirstAvailable(mod, names, args) {
   return null;
 }
 
+function limpiarNombreArchivo(nombre = "archivo") {
+  return String(nombre)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .toLowerCase();
+}
+
+async function descargarArchivoDesdeUrl(archivo, index = 0) {
+  const url = archivo.public_url || archivo.publicUrl || archivo.url;
+
+  if (!url) {
+    throw new Error(
+      `Archivo Storage #${index + 1} no tiene public_url para descargar.`
+    );
+  }
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `No se pudo descargar ${archivo.nombre || archivo.storage_path}: HTTP ${response.status}`
+    );
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  const nombre = limpiarNombreArchivo(
+    archivo.nombre || path.basename(archivo.storage_path || `archivo-${index + 1}`)
+  );
+
+  const filepath = path.join(
+    os.tmpdir(),
+    `emc-${Date.now()}-${index}-${nombre}`
+  );
+
+  fs.writeFileSync(filepath, buffer);
+
+  return {
+    originalFilename: archivo.nombre || nombre,
+    newFilename: nombre,
+    filepath,
+    path: filepath,
+    mimetype: archivo.mime || "application/octet-stream",
+    type: archivo.mime || "application/octet-stream",
+    size: archivo.size || buffer.length,
+    bucket: archivo.bucket || null,
+    storage_path: archivo.storage_path || null,
+    public_url: url,
+  };
+}
+
+async function prepararPayloadStorage(payload = {}) {
+  if (payload.origen_archivo !== "supabase-storage") return payload;
+
+  const archivos = Array.isArray(payload.archivos) ? payload.archivos : [];
+
+  if (!archivos.length) {
+    throw new Error("El payload Storage no contiene archivos.");
+  }
+
+  const archivosLocales = [];
+
+  for (let index = 0; index < archivos.length; index += 1) {
+    const local = await descargarArchivoDesdeUrl(archivos[index], index);
+    archivosLocales.push(local);
+  }
+
+  return {
+    ...payload,
+    archivos_storage: archivos,
+    archivos_locales: archivosLocales,
+    files: {
+      ...(payload.files || {}),
+      archivo: archivosLocales[0],
+      archivos: archivosLocales[0],
+      catalogo: archivosLocales[0],
+      pdf: archivosLocales[0],
+    },
+  };
+}
+
 function createLocalJob(payload = {}) {
   const jobId =
     "emc_job_" +
@@ -171,15 +277,29 @@ function createLocalJob(payload = {}) {
     "_" +
     Math.random().toString(36).slice(2, 8);
 
+  const file = getUploadedFile(payload);
+
   const job = {
     id: jobId,
     tipo: "emc-vision-import-v2",
     estado: "pendiente",
-    proveedor_id: payload.proveedor_id || payload.proveedorId || null,
-    proveedor_nombre: payload.proveedor_nombre || payload.proveedor || null,
-    archivo_nombre: null,
-    archivo_path: null,
-    mime: null,
+    proveedor_id: getProveedorId(payload),
+    proveedor_nombre: getProveedorNombre(payload),
+    archivo_nombre:
+      file?.originalFilename ||
+      file?.newFilename ||
+      payload.archivos?.[0]?.nombre ||
+      null,
+    archivo_path:
+      getFilePath(file) ||
+      payload.archivos?.[0]?.storage_path ||
+      null,
+    mime:
+      file?.mimetype ||
+      file?.type ||
+      payload.archivos?.[0]?.mime ||
+      null,
+    origen_archivo: payload.origen_archivo || "directo",
     pagina_actual: 0,
     paginas_total: 0,
     porcentaje: 0,
@@ -192,14 +312,6 @@ function createLocalJob(payload = {}) {
     actualizado_en: nowISO(),
     finalizado_en: null,
   };
-
-  const file = getUploadedFile(payload);
-
-  if (file) {
-    job.archivo_nombre = file.originalFilename || file.newFilename || null;
-    job.archivo_path = getFilePath(file);
-    job.mime = file.mimetype || file.type || null;
-  }
 
   JOBS.set(jobId, job);
   return job;
@@ -222,11 +334,11 @@ function updateJob(jobId, patch) {
 async function runVisionJobInBackground(jobId, payload) {
   const jobEngine = safeRequire("../lib/emc/job-engine.js");
 
-  updateJob(jobId, {
-    estado: "procesando",
-  });
+  updateJob(jobId, { estado: "procesando" });
 
   try {
+    const preparedPayload = await prepararPayloadStorage(payload);
+
     const result = await callFirstAvailable(
       jobEngine,
       [
@@ -240,27 +352,19 @@ async function runVisionJobInBackground(jobId, payload) {
       [
         {
           jobId,
-          payload,
+          payload: preparedPayload,
           updateProgress: (patch) => updateJob(jobId, patch),
           getJob: () => JOBS.get(jobId),
         },
       ]
     );
 
-    if (result) {
-      updateJob(jobId, {
-        ...result,
-        estado: result.estado || "finalizado",
-        porcentaje: result.porcentaje ?? 100,
-        finalizado_en: nowISO(),
-      });
-    } else {
-      updateJob(jobId, {
-        estado: "finalizado",
-        porcentaje: 100,
-        finalizado_en: nowISO(),
-      });
-    }
+    updateJob(jobId, {
+      ...(result || {}),
+      estado: result?.estado || "finalizado",
+      porcentaje: result?.porcentaje ?? 100,
+      finalizado_en: nowISO(),
+    });
   } catch (error) {
     const current = JOBS.get(jobId);
 
@@ -345,6 +449,8 @@ async function handleEstadoJobEMC(req, res, payload) {
 async function handleImportarEMC(req, res, payload) {
   const importEngine = safeRequire("../lib/emc-import-engine.js");
 
+  const preparedPayload = await prepararPayloadStorage(payload);
+
   const result = await callFirstAvailable(
     importEngine,
     [
@@ -354,7 +460,7 @@ async function handleImportarEMC(req, res, payload) {
       "processEMCImport",
       "default",
     ],
-    [payload]
+    [preparedPayload]
   );
 
   if (!result) {
@@ -367,6 +473,7 @@ async function handleImportarEMC(req, res, payload) {
   return json(req, res, 200, {
     ok: true,
     tipo: "importar-emc",
+    origen_archivo: preparedPayload.origen_archivo || "directo",
     ...result,
   });
 }
