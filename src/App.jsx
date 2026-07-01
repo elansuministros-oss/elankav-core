@@ -1,11 +1,13 @@
 ﻿import { useMemo, useState } from 'react';
 import CentroIA from './pages/CentroIA';
 import TestSupabase from './pages/TestSupabase';
+import AI23CentroCostos from './pages/AI23CentroCostos';
 import { cargarDatosCRM, calcularEstadoGlobal, construirReporteEjecutivo } from './core/CentralBridge';
 import './App.css';
 
 const MODULOS = [
   { id: 'ia', titulo: 'Centro IA', detalle: 'Preguntar y decidir' },
+  { id: 'ai23', titulo: 'AI-23 Costos', detalle: 'Centro de Costos ELAN' },
   { id: 'operacion', titulo: 'Operación', detalle: 'Pedidos y cobros' },
   { id: 'whatsapp', titulo: 'WhatsApp', detalle: 'Leads y seguimiento' },
   { id: 'reportes', titulo: 'Reportes', detalle: 'Estado ejecutivo' },
@@ -132,13 +134,17 @@ export default function App() {
         />
       )}
 
+      {modulo === 'ai23' && <AI23CentroCostos />}
+
       {modulo === 'admin' && (
         <section className="module-card admin-module">
           <span>Administrador</span>
           <h2>Seguridad del sistema</h2>
           <p>La contraseña actual se cambia en Vercel por seguridad.</p>
 
-          <TestSupabase />`n`n          <div className="admin-grid">
+          <TestSupabase />
+
+          <div className="admin-grid">
             <article>
               <strong>Cambiar contraseña</strong>
               <p>Editar variable KAVTORE_ADMIN_PASS en Vercel y hacer Redeploy.</p>
@@ -162,7 +168,7 @@ export default function App() {
         </section>
       )}
 
-      {modulo !== 'ia' && modulo !== 'admin' && (
+      {modulo !== 'ia' && modulo !== 'ai23' && modulo !== 'admin' && (
         <section className="module-card">
           <span>{moduloActivo.titulo}</span>
           <h2>{moduloActivo.titulo}</h2>
@@ -172,4 +178,3 @@ export default function App() {
     </main>
   );
 }
-

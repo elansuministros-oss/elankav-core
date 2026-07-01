@@ -1,0 +1,234 @@
+﻿.ai23 {
+  display: grid;
+  gap: 14px;
+  max-width: 1180px;
+  margin: 0 auto;
+  color: #f8fafc;
+}
+
+.ai23-hero,
+.ai23-panel,
+.ai23-stat,
+.ai23-error {
+  background: rgba(15, 31, 52, 0.94);
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  border-radius: 26px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.22);
+}
+
+.ai23-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 22px;
+}
+
+.ai23-hero span {
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: .13em;
+}
+
+.ai23-hero h1,
+.ai23-panel h2 {
+  margin: 6px 0;
+  color: white;
+  letter-spacing: -.06em;
+}
+
+.ai23-hero h1 {
+  font-size: clamp(32px, 6vw, 58px);
+  line-height: .95;
+}
+
+.ai23-hero p,
+.ai23-panel p {
+  color: #cbd5e1;
+  margin: 0;
+}
+
+.ai23 button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 14px;
+  font-weight: 950;
+  color: #06111f;
+  background: linear-gradient(135deg, #7dd3fc, #ffffff);
+}
+
+.ai23-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.ai23-tabs button {
+  white-space: nowrap;
+  background: rgba(15, 31, 52, 0.94);
+  color: #e0f2fe;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+}
+
+.ai23-tabs button.active {
+  background: linear-gradient(135deg, #7dd3fc, #ffffff);
+  color: #06111f;
+}
+
+.ai23-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.ai23-stat {
+  padding: 18px;
+}
+
+.ai23-stat span {
+  display: block;
+  color: #bae6fd;
+  font-weight: 900;
+}
+
+.ai23-stat strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 42px;
+  color: white;
+}
+
+.ai23-panel {
+  padding: 18px;
+}
+
+.ai23-form {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.ai23-form label {
+  display: grid;
+  gap: 6px;
+  color: #bae6fd;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.ai23 input,
+.ai23 select {
+  width: 100%;
+  height: 46px;
+  border: 1px solid rgba(125, 211, 252, .28);
+  border-radius: 14px;
+  padding: 0 12px;
+  color: white;
+  background: rgba(3,10,24,.88);
+  outline: none;
+}
+
+.ai23-actions,
+.ai23-duo {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai23-duo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.ai23-duo > div {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(3,10,24,.55);
+  border: 1px solid rgba(125, 211, 252, .18);
+}
+
+.ai23-duo h3 {
+  margin: 0;
+  color: white;
+}
+
+.ai23-table-wrap {
+  overflow: auto;
+  margin-top: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(125, 211, 252, .18);
+}
+
+.ai23-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 840px;
+}
+
+.ai23-table th,
+.ai23-table td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(125, 211, 252, .14);
+  text-align: left;
+  color: #f8fafc;
+}
+
+.ai23-table th {
+  color: #bae6fd;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.ai23-table td button {
+  margin-right: 6px;
+  min-height: 34px;
+}
+
+.ai23-error {
+  padding: 14px 16px;
+  color: #fde68a;
+}
+
+.ai23-main-btn {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.ai23-result {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(3,10,24,.72);
+  border: 1px solid rgba(125, 211, 252, .22);
+}
+
+.ai23-result strong {
+  color: white;
+  font-size: 28px;
+}
+
+.ai23-result span {
+  color: #cbd5e1;
+}
+
+@media (max-width: 780px) {
+  .ai23-hero {
+    display: grid;
+  }
+
+  .ai23-grid,
+  .ai23-form,
+  .ai23-duo {
+    grid-template-columns: 1fr;
+  }
+}
