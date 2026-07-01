@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+﻿/* eslint-disable no-console */
 
 import * as XLSX from "xlsx";
 import { downloadStorageFile } from "../lib/emc/storage-engine.js";
@@ -19,10 +19,7 @@ const ALLOWED_ORIGINS = new Set([
 
 function cors(req, res) {
   const origin = req.headers.origin || "";
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    ALLOWED_ORIGINS.has(origin) ? origin : "https://visual.elankav.com"
-  );
+  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGINS.has(origin) ? origin : "https://visual.elankav.com");
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -45,12 +42,7 @@ function pagesFromExcel(buffer) {
       .filter(Boolean)
       .join("\n");
 
-    return {
-      pagina: index + 1,
-      hoja: sheetName,
-      text,
-      chars: text.length,
-    };
+    return { pagina: index + 1, hoja: sheetName, text, chars: text.length };
   }).filter((page) => page.text);
 }
 
@@ -61,6 +53,7 @@ function pagesFromText(buffer) {
 
 async function processDownloadedFile({ file, proveedor, guardarAutomatico, context }) {
   const result = {
+    ok: true,
     name: file.name,
     mime: file.mime,
     type: file.type,
@@ -68,6 +61,7 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
     path: file.path,
     size: file.size,
     paginas_total: 0,
+    paginas_procesadas: 0,
     paginas: [],
     total_items: 0,
     total_guardados: 0,
@@ -76,7 +70,14 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
 
   if (file.type === "pdf") {
     const pdf = await extractPdfPages(file.buffer);
-    result.paginas_total = pdf.total_pages;
+
+    result.paginas_total = Number(pdf.total_pages || 0);
+    result.paginas_procesadas = Number(pdf.processed_pages || pdf.pages?.length || 0);
+    result.pdf_truncado = Boolean(pdf.truncated);
+
+    if (!pdf.pages?.length) {
+      throw new Error(`PDF sin páginas procesables. total_pages=${result.paginas_total}`);
+    }
 
     for (const page of pdf.pages) {
       const pageResult = await processPageSafe({
@@ -84,6 +85,7 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
         archivo: file,
         pagina: page.pagina,
         text: page.text,
+        image: page.image,
         context,
         guardarAutomatico,
       });
@@ -92,9 +94,7 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
       result.total_items += Number(pageResult.items_detectados || 0);
       result.total_guardados += Number(pageResult.items_guardados || 0);
 
-      if (!pageResult.ok) {
-        result.errores.push({ pagina: page.pagina, error: pageResult.error });
-      }
+      if (!pageResult.ok) result.errores.push({ pagina: page.pagina, error: pageResult.error });
     }
 
     return result;
@@ -103,6 +103,7 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
   if (file.type === "excel") {
     const pages = pagesFromExcel(file.buffer);
     result.paginas_total = pages.length;
+    result.paginas_procesadas = pages.length;
 
     for (const page of pages) {
       const pageResult = await processPageSafe({
@@ -118,9 +119,7 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
       result.total_items += Number(pageResult.items_detectados || 0);
       result.total_guardados += Number(pageResult.items_guardados || 0);
 
-      if (!pageResult.ok) {
-        result.errores.push({ pagina: page.pagina, hoja: page.hoja, error: pageResult.error });
-      }
+      if (!pageResult.ok) result.errores.push({ pagina: page.pagina, hoja: page.hoja, error: pageResult.error });
     }
 
     return result;
@@ -129,6 +128,7 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
   if (file.type === "csv" || file.type === "txt") {
     const pages = pagesFromText(file.buffer);
     result.paginas_total = pages.length;
+    result.paginas_procesadas = pages.length;
 
     for (const page of pages) {
       const pageResult = await processPageSafe({
@@ -144,9 +144,7 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
       result.total_items += Number(pageResult.items_detectados || 0);
       result.total_guardados += Number(pageResult.items_guardados || 0);
 
-      if (!pageResult.ok) {
-        result.errores.push({ pagina: page.pagina, error: pageResult.error });
-      }
+      if (!pageResult.ok) result.errores.push({ pagina: page.pagina, error: pageResult.error });
     }
 
     return result;
@@ -154,11 +152,12 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
 
   if (file.type === "image") {
     result.paginas_total = 1;
+    result.paginas_procesadas = 1;
 
     const vision = await analyzeImageProducts({
       buffer: file.buffer,
       mime: file.mime || "image/png",
-      context,
+      context: { ...context, pagina: 1 },
     });
 
     const pageResult = await processPageSafe({
@@ -174,19 +173,13 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
     result.total_items += Number(pageResult.items_detectados || 0);
     result.total_guardados += Number(pageResult.items_guardados || 0);
 
-    if (!vision.ok) {
-      result.errores.push({ pagina: 1, error: vision.error });
-    }
-
-    if (!pageResult.ok) {
-      result.errores.push({ pagina: 1, error: pageResult.error });
-    }
+    if (!vision.ok) result.errores.push({ pagina: 1, error: vision.error });
+    if (!pageResult.ok) result.errores.push({ pagina: 1, error: pageResult.error });
 
     return result;
   }
 
-  result.errores.push({ error: `Tipo de archivo no soportado: ${file.type}` });
-  return result;
+  throw new Error(`Tipo de archivo no soportado: ${file.type}`);
 }
 
 export default async function handler(req, res) {
@@ -198,14 +191,12 @@ export default async function handler(req, res) {
     return send(res, 200, {
       ok: true,
       endpoint: "/api/emc-import",
-      version: "AI-22-EMC-IMPORTADOR-NUEVO",
+      version: "AI-22-EMC-IMPORTADOR-NUEVO-REBUILD",
       status: "ready",
     });
   }
 
-  if (req.method !== "POST") {
-    return send(res, 405, { ok: false, error: "Metodo no permitido." });
-  }
+  if (req.method !== "POST") return send(res, 405, { ok: false, error: "Metodo no permitido." });
 
   try {
     const body = req.body || {};
@@ -213,13 +204,8 @@ export default async function handler(req, res) {
     const archivos = Array.isArray(body.archivos) ? body.archivos : [];
     const guardarAutomatico = Boolean(body.guardar_automatico || body.guardarAutomatico);
 
-    if (!proveedor?.id) {
-      return send(res, 400, { ok: false, error: "Falta proveedor.id." });
-    }
-
-    if (!archivos.length) {
-      return send(res, 400, { ok: false, error: "Faltan archivos para importar." });
-    }
+    if (!proveedor?.id) return send(res, 400, { ok: false, error: "Falta proveedor.id." });
+    if (!archivos.length) return send(res, 400, { ok: false, error: "Faltan archivos para importar." });
 
     const resultados = [];
 
@@ -240,10 +226,11 @@ export default async function handler(req, res) {
         resultados.push(resultado);
       } catch (error) {
         resultados.push({
-          name: archivo.nombre || archivo.name || archivo.storage_path || "archivo",
           ok: false,
+          name: archivo.nombre || archivo.name || archivo.storage_path || "archivo",
           error: error.message || "Error procesando archivo EMC.",
           paginas_total: 0,
+          paginas_procesadas: 0,
           paginas: [],
           total_items: 0,
           total_guardados: 0,
@@ -252,18 +239,21 @@ export default async function handler(req, res) {
       }
     }
 
+    const resumen = {
+      archivos: resultados.length,
+      paginas: resultados.reduce((sum, item) => sum + Number(item.paginas_total || 0), 0),
+      paginas_procesadas: resultados.reduce((sum, item) => sum + Number(item.paginas_procesadas || 0), 0),
+      items_detectados: resultados.reduce((sum, item) => sum + Number(item.total_items || 0), 0),
+      items_guardados: resultados.reduce((sum, item) => sum + Number(item.total_guardados || 0), 0),
+      errores: resultados.reduce((sum, item) => sum + Number(item.errores?.length || 0), 0),
+    };
+
     return send(res, 200, {
-      ok: true,
-      tipo: "emc-import-ai-22",
+      ok: resumen.errores === 0 || resumen.items_detectados > 0,
+      tipo: "emc-import-ai-22-rebuild",
       proveedor,
       guardar_automatico: guardarAutomatico,
-      resumen: {
-        archivos: resultados.length,
-        paginas: resultados.reduce((sum, item) => sum + Number(item.paginas_total || 0), 0),
-        items_detectados: resultados.reduce((sum, item) => sum + Number(item.total_items || 0), 0),
-        items_guardados: resultados.reduce((sum, item) => sum + Number(item.total_guardados || 0), 0),
-        errores: resultados.reduce((sum, item) => sum + Number(item.errores?.length || 0), 0),
-      },
+      resumen,
       resultados,
     });
   } catch (error) {
