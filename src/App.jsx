@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState } from 'react';
 import CentroIA from './pages/CentroIA';
 import TestSupabase from './pages/TestSupabase';
+import AI23CentroCostos from './pages/AI23CentroCostos';
 import { cargarDatosCRM, calcularEstadoGlobal, construirReporteEjecutivo } from './core/CentralBridge';
 import './App.css';
 
@@ -9,6 +10,7 @@ const MODULOS = [
   { id: 'operacion', titulo: 'Operación', detalle: 'Pedidos y cobros' },
   { id: 'whatsapp', titulo: 'WhatsApp', detalle: 'Leads y seguimiento' },
   { id: 'reportes', titulo: 'Reportes', detalle: 'Estado ejecutivo' },
+  { id: 'ai23', titulo: 'AI-23 Costos', detalle: 'Centro de Costos' },
   { id: 'admin', titulo: 'Administrador', detalle: 'Seguridad y sistema' },
 ];
 
@@ -130,6 +132,10 @@ export default function App() {
           estadoGlobal={estadoGlobal}
           reporteEjecutivo={reporteEjecutivo}
         />
+      )}
+
+      {modulo === 'ai23' && (
+        <AI23CentroCostos />
       )}
 
       {modulo === 'admin' && (

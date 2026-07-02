@@ -42,6 +42,16 @@ export default function AI23CentroCostos() {
   const [forms, setForms] = useState(emptyForms);
   const [editando, setEditando] = useState(null);
 
+  const [combinacionActivaId, setCombinacionActivaId] = useState("");
+  const [componentesCombinacion, setComponentesCombinacion] = useState([]);
+  const [resultadoCombinacion, setResultadoCombinacion] = useState(null);
+  const [combinacionComponenteForm, setCombinacionComponenteForm] = useState({
+    componente_id: "",
+    cantidad: "1",
+    factor_merma: "0",
+    observacion: ""
+  });
+
   const [motor, setMotor] = useState({
     moneda: "USD",
     tipo_cambio: "36.80",
@@ -110,6 +120,11 @@ export default function AI23CentroCostos() {
       ...prev,
       [tipo]: { ...prev[tipo], ...item }
     }));
+
+    if (tipo === "combinaciones") {
+      setCombinacionActivaId(item.id);
+      setResultadoCombinacion(null);
+    }
   }
 
   function cancelar(tipo) {
@@ -165,7 +180,114 @@ export default function AI23CentroCostos() {
       const result = await serviceMap[tipo].eliminar(id);
       if (!result.ok) throw new Error(getError(result, "No se pudo eliminar."));
 
+      if (tipo === "combinaciones" && String(combinacionActivaId) === String(id)) {
+        setCombinacionActivaId("");
+        setComponentesCombinacion([]);
+        setResultadoCombinacion(null);
+      }
+
       await cargarTodo();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cargarComponentesCombinacion(combinacionId) {
+    if (!combinacionId) {
+      setComponentesCombinacion([]);
+      setResultadoCombinacion(null);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await services.combinaciones.listarComponentes(combinacionId);
+      if (!result.ok) throw new Error(getError(result, "No se pudieron cargar componentes de la combinaci�n."));
+
+      setComponentesCombinacion(result.data || []);
+      setResultadoCombinacion(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function agregarComponenteACombinacion() {
+    if (!combinacionActivaId) {
+      setError("Seleccione una combinaci�n antes de agregar componentes.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await services.combinaciones.agregarComponente({
+        combinacion_id: combinacionActivaId,
+        componente_id: combinacionComponenteForm.componente_id,
+        cantidad: combinacionComponenteForm.cantidad,
+        factor_merma: combinacionComponenteForm.factor_merma,
+        observacion: combinacionComponenteForm.observacion
+      });
+
+      if (!result.ok) throw new Error(getError(result, "No se pudo agregar el componente."));
+
+      setCombinacionComponenteForm({
+        componente_id: "",
+        cantidad: "1",
+        factor_merma: "0",
+        observacion: ""
+      });
+
+      await cargarComponentesCombinacion(combinacionActivaId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function eliminarComponenteDeCombinacion(id) {
+    const seguro = window.confirm("�Eliminar este componente de la combinaci�n?");
+    if (!seguro) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await services.combinaciones.eliminarComponente(id);
+      if (!result.ok) throw new Error(getError(result, "No se pudo eliminar el componente."));
+
+      await cargarComponentesCombinacion(combinacionActivaId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function recalcularCombinacion() {
+    if (!combinacionActivaId) {
+      setError("Seleccione una combinaci�n antes de recalcular costos.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await services.motorCostos.calcularCombinacion({
+        combinacion_id: combinacionActivaId,
+        tipo_cambio: motor.tipo_cambio
+      });
+
+      if (!result.ok) throw new Error(getError(result, "No se pudo recalcular la combinaci�n."));
+      setResultadoCombinacion(result.data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -279,19 +401,117 @@ export default function AI23CentroCostos() {
       )}
 
       {tab === "combinaciones" && (
-        <CrudPanel
-          title="Combinaciones"
-          tipo="combinaciones"
-          form={forms.combinaciones}
-          rows={combinaciones}
-          setForm={setForm}
-          guardar={guardar}
-          cancelar={cancelar}
-          editar={editar}
-          eliminar={eliminar}
-          editando={editando}
-          fields={["codigo","nombre","descripcion","categoria","unidad_resultado","margen_porcentaje","mano_obra","indirectos","estado"]}
-        />
+        <>
+          <CrudPanel
+            title="Combinaciones"
+            tipo="combinaciones"
+            form={forms.combinaciones}
+            rows={combinaciones}
+            setForm={setForm}
+            guardar={guardar}
+            cancelar={cancelar}
+            editar={editar}
+            eliminar={eliminar}
+            editando={editando}
+            fields={["codigo","nombre","descripcion","categoria","unidad_resultado","margen_porcentaje","mano_obra","indirectos","estado"]}
+          />
+
+          <section className="ai23-panel">
+            <h2>Componentes de combinaci�n</h2>
+
+            <div className="ai23-form">
+              <label>
+                Combinaci�n
+                <select value={combinacionActivaId} onChange={(e) => setCombinacionActivaId(e.target.value)}>
+                  <option value="">Seleccionar combinaci�n</option>
+                  {combinaciones.map((item) => (
+                    <option key={item.id} value={item.id}>{item.nombre}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Componente
+                <select value={combinacionComponenteForm.componente_id} onChange={(e) => setCombinacionComponenteForm((prev) => ({ ...prev, componente_id: e.target.value }))}>
+                  <option value="">Seleccionar componente</option>
+                  {componentes.map((item) => (
+                    <option key={item.id} value={item.id}>{item.nombre}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Cantidad
+                <input value={combinacionComponenteForm.cantidad} onChange={(e) => setCombinacionComponenteForm((prev) => ({ ...prev, cantidad: e.target.value }))} />
+              </label>
+
+              <label>
+                Factor merma
+                <input value={combinacionComponenteForm.factor_merma} onChange={(e) => setCombinacionComponenteForm((prev) => ({ ...prev, factor_merma: e.target.value }))} />
+              </label>
+
+              <label>
+                Observaci�n
+                <input value={combinacionComponenteForm.observacion} onChange={(e) => setCombinacionComponenteForm((prev) => ({ ...prev, observacion: e.target.value }))} />
+              </label>
+            </div>
+
+            <div className="ai23-actions">
+              <button type="button" onClick={agregarComponenteACombinacion}>Agregar componente</button>
+              <button type="button" onClick={() => cargarComponentesCombinacion(combinacionActivaId)}>Ver componentes</button>
+              <button type="button" onClick={recalcularCombinacion}>Recalcular costos</button>
+            </div>
+
+            {resultadoCombinacion && (
+              <div className="ai23-result">
+                <strong>Total: {money(resultadoCombinacion.resumen.total, resultadoCombinacion.moneda)}</strong>
+                <span>Base: {money(resultadoCombinacion.resumen.costo_base, resultadoCombinacion.moneda)}</span>
+                <span>Margen: {money(resultadoCombinacion.resumen.margen_valor, resultadoCombinacion.moneda)}</span>
+                <span>Total USD: {resultadoCombinacion.resumen.total_usd === null ? "Sin TC" : money(resultadoCombinacion.resumen.total_usd, "USD")}</span>
+                <span>Total NIO: {resultadoCombinacion.resumen.total_nio === null ? "Sin TC" : money(resultadoCombinacion.resumen.total_nio, "NIO")}</span>
+              </div>
+            )}
+
+            <div className="ai23-table-wrap">
+              <table className="ai23-table">
+                <thead>
+                  <tr>
+                    <th>Componente</th>
+                    <th>Cantidad</th>
+                    <th>Merma</th>
+                    <th>Observaci�n</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!combinacionActivaId && (
+                    <tr><td colSpan="5">Seleccione una combinaci�n.</td></tr>
+                  )}
+
+                  {combinacionActivaId && componentesCombinacion.length === 0 && (
+                    <tr><td colSpan="5">Sin componentes agregados.</td></tr>
+                  )}
+
+                  {componentesCombinacion.map((item) => {
+                    const componente = componentes.find((c) => String(c.id) === String(item.componente_id));
+
+                    return (
+                      <tr key={item.id}>
+                        <td>{componente?.nombre || item.componente_id}</td>
+                        <td>{item.cantidad}</td>
+                        <td>{item.factor_merma ?? 0}</td>
+                        <td>{item.observacion || "-"}</td>
+                        <td>
+                          <button type="button" onClick={() => eliminarComponenteDeCombinacion(item.id)}>Eliminar</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
       )}
 
       {tab === "adicionales" && (
