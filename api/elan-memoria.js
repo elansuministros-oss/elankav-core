@@ -16,9 +16,6 @@ export default async function handler(req, res) {
     const fuentes = memoria.fuentes || {};
 
     const conteos = {
-      materiales_ia_v2: fuentes.materiales_ia_v2?.length || 0,
-      materiales_master_v2: fuentes.materiales_master_v2?.length || 0,
-      tintas_master: fuentes.tintas_master?.length || 0,
       biblioteca_tecnica: fuentes.biblioteca_tecnica?.length || 0,
       biblioteca_componentes: fuentes.biblioteca_componentes?.length || 0,
       tecnologias_impresion: fuentes.tecnologias_impresion?.length || 0,
@@ -26,9 +23,6 @@ export default async function handler(req, res) {
     };
 
     const resultados = {
-      materiales_ia_v2: fuentes.materiales_ia_v2?.slice(0, 5) || [],
-      materiales_master_v2: fuentes.materiales_master_v2?.slice(0, 5) || [],
-      tintas_master: fuentes.tintas_master?.slice(0, 5) || [],
       biblioteca_tecnica: fuentes.biblioteca_tecnica?.slice(0, 5) || [],
       biblioteca_componentes: fuentes.biblioteca_componentes?.slice(0, 5) || [],
       tecnologias_impresion: fuentes.tecnologias_impresion?.slice(0, 5) || [],
@@ -39,7 +33,12 @@ export default async function handler(req, res) {
       ok: memoria.estado_fuentes?.supabase !== "error",
       endpoint: "/api/elan-memoria",
       version: memoria.version,
-      metodo: "memoria_operativa_unificada",
+      metodo: "memoria_operativa_ai23",
+      costos: {
+        fuente_oficial: "AI-23",
+        fachada: "lib/ai23/index.js",
+        nota: "Este endpoint no expone precios ni costos antiguos. Los cálculos cubiertos por AI-23 se resuelven por /api/elan-ai usando el motor de costos AI-23."
+      },
       rpc: "elankav_memoria_operativa",
       supabase_url: process.env.SUPABASE_URL,
       estado_fuentes: memoria.estado_fuentes,
@@ -55,3 +54,4 @@ export default async function handler(req, res) {
     });
   }
 }
+'@ | Set-Content .\api\elan-memoria.js -Encoding UTF8

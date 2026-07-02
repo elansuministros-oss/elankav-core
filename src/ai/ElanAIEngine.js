@@ -1,4 +1,4 @@
-export function normalizarTexto(valor = '') {
+﻿export function normalizarTexto(valor = '') {
   return String(valor)
     .toLowerCase()
     .normalize('NFD')
@@ -19,7 +19,6 @@ export function analizarCRM(datosCore = {}, estadoGlobal = {}) {
   const produccion = obtenerColeccion(datosCore, 'produccion');
   const cobros = obtenerColeccion(datosCore, 'cobros');
   const inventario = obtenerColeccion(datosCore, 'inventario');
-  const materiales = obtenerColeccion(datosCore, 'materiales');
   const proveedores = obtenerColeccion(datosCore, 'proveedores');
 
   const totalPedidos = pedidos.reduce((suma, item) => suma + Number(item.total || item.monto || 0), 0);
@@ -41,7 +40,6 @@ export function analizarCRM(datosCore = {}, estadoGlobal = {}) {
     produccion,
     cobros,
     inventario,
-    materiales,
     proveedores,
     totalPedidos,
     totalCotizado,
@@ -58,13 +56,26 @@ export function responderELANAI(pregunta = '', datosCore = {}, estadoGlobal = {}
   const analisis = analizarCRM(datosCore, estadoGlobal);
 
   if (!texto.trim()) {
-    return 'Escribí una consulta para analizar el CRM CENTRAL.';
+    return 'EscribÃ­ una consulta para analizar el CRM CENTRAL.';
+  }
+
+  if (
+    texto.includes('precio') ||
+    texto.includes('precios') ||
+    texto.includes('costo') ||
+    texto.includes('costos') ||
+    texto.includes('cotizar') ||
+    texto.includes('cotizacion') ||
+    texto.includes('cotizaciÃ³n') ||
+    texto.includes('calcular')
+  ) {
+    return 'Para costos, precios o cotizaciones cubiertas por el Centro de Costos, ELAN AI debe usar exclusivamente AI-23 mediante /api/elan-ai y lib/ai23/index.js. Este motor CRM no calcula costos ni usa fuentes antiguas.';
   }
 
   if (texto.includes('hoy') || texto.includes('prioridad') || texto.includes('atender')) {
     return `Prioridad ejecutiva: revisar ${analisis.pedidosPendientes.length} pedido(s) pendiente(s), confirmar cobros por C$${analisis.pendienteCobro.toLocaleString(
       'es-NI'
-    )} y completar producción, inventario y costos para calcular utilidad real.`;
+    )} y completar estados operativos. Los costos deben validarse Ãºnicamente con AI-23.`;
   }
 
   if (texto.includes('cobrar') || texto.includes('cobro') || texto.includes('saldo')) {
@@ -85,19 +96,19 @@ export function responderELANAI(pregunta = '', datosCore = {}, estadoGlobal = {}
     return `Clientes: hay ${analisis.empresas.length} empresa(s), ${analisis.contactos.length} contacto(s) y ${analisis.empresasActivas.length} empresa(s) activa(s).`;
   }
 
-  if (texto.includes('produccion') || texto.includes('orden')) {
-    return `Producción: hay ${analisis.ordenesTrabajo.length} orden(es) de trabajo y ${analisis.produccion.length} registro(s) de producción. Falta alimentar estados reales para calcular atrasos.`;
+  if (texto.includes('produccion') || texto.includes('producciÃ³n') || texto.includes('orden')) {
+    return `ProducciÃ³n: hay ${analisis.ordenesTrabajo.length} orden(es) de trabajo y ${analisis.produccion.length} registro(s) de producciÃ³n. Este mÃ³dulo no calcula costos.`;
   }
 
   if (texto.includes('inventario') || texto.includes('material')) {
-    return `Inventario: hay ${analisis.inventario.length} registro(s) de inventario y ${analisis.materiales.length} material(es). Falta stock real para alertas automáticas.`;
+    return `Inventario: hay ${analisis.inventario.length} registro(s) de inventario. Este mÃ³dulo no usa materiales como fuente de costos; los costos cubiertos deben venir de AI-23.`;
   }
 
   if (texto.includes('proveedor')) {
-    return `Proveedores: hay ${analisis.proveedores.length} proveedor(es). Aún falta registrar precios, tiempos de entrega y disponibilidad para subcontratación inteligente.`;
+    return `Proveedores: hay ${analisis.proveedores.length} proveedor(es). Los precios de proveedor no son calculados por este mÃ³dulo; los costos cubiertos deben resolverse en AI-23.`;
   }
 
-  return `KAVTORÉ leyó el CRM CENTRAL. Estado actual: ${analisis.operaciones} operación(es), ${analisis.empresas.length} empresa(s), pedidos visibles C$${analisis.totalPedidos.toLocaleString(
+  return `KAVTORÃ‰ leyÃ³ el CRM CENTRAL. Estado actual: ${analisis.operaciones} operaciÃ³n(es), ${analisis.empresas.length} empresa(s), pedidos visibles C$${analisis.totalPedidos.toLocaleString(
     'es-NI'
-  )}.`;
+  )}. Para costos cubiertos, usar AI-23.`;
 }
