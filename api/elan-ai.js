@@ -1,5 +1,7 @@
 ﻿/* eslint-disable no-console */
 
+import { createAI23Services } from "../lib/ai23/index.js";
+
 export const config = {
   api: {
     bodyParser: false,
@@ -291,7 +293,6 @@ async function callFirstAvailable(mod, names, args) {
 
 function createLocalJob(payload = {}) {
   const jobId = "emc_job_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
-
   const file = getUploadedFile(payload);
 
   const job = {
@@ -405,13 +406,8 @@ async function handleEstadoJobEMC(req, res, payload) {
 
 async function handleImportarEMC(req, res, payload) {
   const importEngine = await safeImport("../lib/emc-import-engine.js");
-
   const archivos = await prepararArchivosParaImportacion(payload);
-
-  const body = {
-    ...payload,
-    archivos,
-  };
+  const body = { ...payload, archivos };
 
   const result = await callFirstAvailable(
     importEngine,
@@ -466,6 +462,59 @@ async function handleGuardarEMC(req, res, payload) {
   });
 }
 
+async function handleAI23MotorCostos(req, res, payload) {
+  const ai23 = createAI23Services();
+
+  const modo = String(payload.modo || payload.metodo || "").trim().toLowerCase();
+
+  const calculoPayload = {
+    componentes: Array.isArray(payload.componentes) ? payload.componentes : [],
+    adicionales: Array.isArray(payload.adicionales) ? payload.adicionales : [],
+    mano_obra: payload.mano_obra ?? payload.manoObra ?? 0,
+    indirectos: payload.indirectos ?? 0,
+    margen_porcentaje: payload.margen_porcentaje ?? payload.margenPorcentaje ?? 0,
+    moneda: payload.moneda || "USD",
+    tipo_cambio: payload.tipo_cambio ?? payload.tipoCambio ?? null,
+  };
+
+  const resultado =
+    modo === "combinacion" || payload.combinacion_id || payload.combinacionId
+      ? await ai23.motorCostos.calcularCombinacion({
+          ...calculoPayload,
+          combinacion_id: payload.combinacion_id ?? payload.combinacionId,
+        })
+      : ai23.motorCostos.calcularManual(calculoPayload);
+
+  if (!resultado?.ok) {
+    return json(req, res, 400, {
+      ok: false,
+      tipo: "ai23-motor-costos",
+      fuente_costos: "AI-23",
+      error: resultado?.message || resultado?.error || "AI-23 no pudo calcular el costo.",
+      detalle: resultado,
+    });
+  }
+
+  const data = resultado.data || {};
+  const resumen = data.resumen || {};
+
+  return json(req, res, 200, {
+    ok: true,
+    tipo: "ai23-motor-costos",
+    fuente_costos: "AI-23",
+    moneda: data.moneda || calculoPayload.moneda,
+    tipo_cambio: data.tipo_cambio,
+    total_usd: resumen.total_usd,
+    total_nio: resumen.total_nio,
+    total: resumen.total,
+    resumen,
+    componentes: data.componentes || [],
+    adicionales: data.adicionales || [],
+    combinacion: data.combinacion || null,
+    respuesta: `Costo calculado con AI-23. Total USD: ${resumen.total_usd ?? "N/D"} / Total C$: ${resumen.total_nio ?? "N/D"}. Tipo de cambio usado: ${data.tipo_cambio ?? "no aplicado"}.`,
+  });
+}
+
 async function handler(req, res) {
   applyCors(req, res);
 
@@ -480,7 +529,7 @@ async function handler(req, res) {
         ok: true,
         service: "ELANKAV CORE AI",
         status: "online",
-        version: "AI-20 EMC Text Import Reset",
+        version: "AI-23 P06 Motor IA",
       });
     }
 
@@ -499,11 +548,29 @@ async function handler(req, res) {
     if (tipo === "importar-emc") return await handleImportarEMC(req, res, payload);
     if (tipo === "guardar-emc") return await handleGuardarEMC(req, res, payload);
 
+    if (
+      tipo === "ai23-motor-costos" ||
+      tipo === "calcular-costo-ai23" ||
+      tipo === "cotizar-ai23" ||
+      tipo === "costo-ai"
+    ) {
+      return await handleAI23MotorCostos(req, res, payload);
+    }
+
     return json(req, res, 400, {
       ok: false,
       error: "Tipo no soportado en api/elan-ai.js",
       tipo_recibido: tipo || null,
-      tipos_soportados: ["importar-emc", "guardar-emc", "crear-job-emc", "estado-job-emc"],
+      tipos_soportados: [
+        "importar-emc",
+        "guardar-emc",
+        "crear-job-emc",
+        "estado-job-emc",
+        "ai23-motor-costos",
+        "calcular-costo-ai23",
+        "cotizar-ai23",
+        "costo-ai",
+      ],
     });
   } catch (error) {
     console.error("ERROR /api/elan-ai:", error);
@@ -516,4 +583,3 @@ async function handler(req, res) {
 }
 
 export default handler;
-
