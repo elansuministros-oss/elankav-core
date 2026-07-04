@@ -21,12 +21,15 @@ function cors(req, res) {
   const origin = req.headers.origin || "";
   res.setHeader(
     "Access-Control-Allow-Origin",
-    ALLOWED_ORIGINS.has(origin) ? origin : "https://visual.elankav.com"
+    ALLOWED_ORIGINS.has(origin) ? origin : "https://visual.elankav.com",
   );
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+  );
 }
 
 function send(res, status, payload) {
@@ -41,7 +44,12 @@ function pagesFromExcel(buffer) {
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
 
     const text = rows
-      .map((row) => row.map((cell) => String(cell || "").trim()).filter(Boolean).join(" | "))
+      .map((row) =>
+        row
+          .map((cell) => String(cell || "").trim())
+          .filter(Boolean)
+          .join(" | "),
+      )
       .filter(Boolean)
       .join("\n");
 
@@ -59,7 +67,12 @@ function pagesFromText(buffer) {
   return text ? [{ pagina: 1, text, chars: text.length }] : [];
 }
 
-async function processDownloadedFile({ file, proveedor, guardarAutomatico, context }) {
+async function processDownloadedFile({
+  file,
+  proveedor,
+  guardarAutomatico,
+  context,
+}) {
   const result = {
     name: file.name,
     mime: file.mime,
@@ -119,7 +132,11 @@ async function processDownloadedFile({ file, proveedor, guardarAutomatico, conte
       result.total_guardados += Number(pageResult.items_guardados || 0);
 
       if (!pageResult.ok) {
-        result.errores.push({ pagina: page.pagina, hoja: page.hoja, error: pageResult.error });
+        result.errores.push({
+          pagina: page.pagina,
+          hoja: page.hoja,
+          error: pageResult.error,
+        });
       }
     }
 
@@ -211,14 +228,19 @@ export default async function handler(req, res) {
     const body = req.body || {};
     const proveedor = body.proveedor || {};
     const archivos = Array.isArray(body.archivos) ? body.archivos : [];
-    const guardarAutomatico = Boolean(body.guardar_automatico || body.guardarAutomatico);
+    const guardarAutomatico = Boolean(
+      body.guardar_automatico || body.guardarAutomatico,
+    );
 
     if (!proveedor?.id) {
       return send(res, 400, { ok: false, error: "Falta proveedor.id." });
     }
 
     if (!archivos.length) {
-      return send(res, 400, { ok: false, error: "Faltan archivos para importar." });
+      return send(res, 400, {
+        ok: false,
+        error: "Faltan archivos para importar.",
+      });
     }
 
     const resultados = [];
@@ -234,20 +256,31 @@ export default async function handler(req, res) {
           context: {
             proveedor_id: proveedor.id,
             proveedor_nombre: proveedor.nombre || proveedor.name || "",
+            moneda:
+              body.moneda ||
+              body.currency ||
+              body.divisa ||
+              proveedor.moneda ||
+              proveedor.currency ||
+              proveedor.divisa ||
+              "NIO",
           },
         });
 
         resultados.push(resultado);
       } catch (error) {
         resultados.push({
-          name: archivo.nombre || archivo.name || archivo.storage_path || "archivo",
+          name:
+            archivo.nombre || archivo.name || archivo.storage_path || "archivo",
           ok: false,
           error: error.message || "Error procesando archivo EMC.",
           paginas_total: 0,
           paginas: [],
           total_items: 0,
           total_guardados: 0,
-          errores: [{ error: error.message || "Error procesando archivo EMC." }],
+          errores: [
+            { error: error.message || "Error procesando archivo EMC." },
+          ],
         });
       }
     }
@@ -259,10 +292,22 @@ export default async function handler(req, res) {
       guardar_automatico: guardarAutomatico,
       resumen: {
         archivos: resultados.length,
-        paginas: resultados.reduce((sum, item) => sum + Number(item.paginas_total || 0), 0),
-        items_detectados: resultados.reduce((sum, item) => sum + Number(item.total_items || 0), 0),
-        items_guardados: resultados.reduce((sum, item) => sum + Number(item.total_guardados || 0), 0),
-        errores: resultados.reduce((sum, item) => sum + Number(item.errores?.length || 0), 0),
+        paginas: resultados.reduce(
+          (sum, item) => sum + Number(item.paginas_total || 0),
+          0,
+        ),
+        items_detectados: resultados.reduce(
+          (sum, item) => sum + Number(item.total_items || 0),
+          0,
+        ),
+        items_guardados: resultados.reduce(
+          (sum, item) => sum + Number(item.total_guardados || 0),
+          0,
+        ),
+        errores: resultados.reduce(
+          (sum, item) => sum + Number(item.errores?.length || 0),
+          0,
+        ),
       },
       resultados,
     });
