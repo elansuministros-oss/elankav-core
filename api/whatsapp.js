@@ -13,23 +13,65 @@ function methodNotAllowed(res) {
   return res.status(405).json({ ok: false, error: 'Metodo no permitido' });
 }
 
+function getHeader(req, name) {
+  const headers = req.headers || {};
+  const expected = String(name || '').toLowerCase();
+  const direct = headers[expected] || headers[name];
+
+  if (direct) return direct;
+
+  const match = Object.entries(headers).find(([key]) => String(key).toLowerCase() === expected);
+  return match ? match[1] : '';
+}
+
 function getIncomingSecret(req) {
-  const authorization = String(req.headers.authorization || '');
+  const authorization = String(getHeader(req, 'authorization') || '');
   const url = new URL(req.url || '/api/whatsapp', 'https://elankav-core.local');
 
   return (
-    req.headers['x-waha-secret'] ||
-    req.headers['x-webhook-secret'] ||
+    getHeader(req, 'x-waha-secret') ||
+    getHeader(req, 'x-webhook-secret') ||
     url.searchParams.get('secret') ||
     (authorization.startsWith('Bearer ') ? authorization.slice(7) : '')
   );
 }
 
-function isAuthorized(req) {
-  const expected = process.env.WAHA_WEBHOOK_SECRET;
-  if (!expected) return true;
+function getExpectedWebhookSessions() {
+  const configured = [
+    process.env.WAHA_WEBHOOK_SESSION,
+    process.env.WAHA_SESSION,
+    'ELANKAV',
+  ];
 
-  return String(getIncomingSecret(req) || '') === String(expected);
+  return configured
+    .flatMap((value) => String(value || '').split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function getEventSession(event = {}) {
+  const payload = event.payload || event.message || event.data || {};
+  return String(event.session || payload.session || '').trim();
+}
+
+function isStrictSecretRequired() {
+  return String(process.env.WAHA_WEBHOOK_REQUIRE_SECRET || '').toLowerCase() === 'true';
+}
+
+function isAuthorized(req, event = {}) {
+  const expected = process.env.WAHA_WEBHOOK_SECRET;
+  const incomingSecret = getIncomingSecret(req);
+
+  if (expected && incomingSecret) {
+    return String(incomingSecret) === String(expected);
+  }
+
+  if (expected && isStrictSecretRequired()) return false;
+
+  const session = getEventSession(event);
+  const expectedSessions = getExpectedWebhookSessions();
+
+  return isValidWahaEvent(event) && Boolean(session) && expectedSessions.includes(session);
 }
 
 async function handleStatus(req, res) {
@@ -94,13 +136,13 @@ async function handleSendFile(req, res) {
 async function handleWebhook(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res);
 
-  if (!isAuthorized(req)) {
+  const event = req.body || {};
+
+  if (!isAuthorized(req, event)) {
     return res.status(401).json({ ok: false, error: 'Webhook WAHA no autorizado' });
   }
 
   try {
-    const event = req.body || {};
-
     if (!isValidWahaEvent(event)) {
       return res.status(400).json({ ok: false, error: 'Evento WAHA invalido' });
     }
