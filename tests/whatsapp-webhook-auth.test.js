@@ -9,6 +9,7 @@ const ORIGINAL_ENV = {
   WAHA_WEBHOOK_SESSION: process.env.WAHA_WEBHOOK_SESSION,
   WAHA_SESSION: process.env.WAHA_SESSION,
   WAHA_BASE_URL: process.env.WAHA_BASE_URL,
+  ELAN_AI_DISABLE_LLM: process.env.ELAN_AI_DISABLE_LLM,
 };
 
 function restoreEnv() {
@@ -70,6 +71,10 @@ async function callWebhook({ body, headers = {} } = {}) {
 test.afterEach(() => {
   restoreEnv();
   clearWebhookReplyMemory();
+});
+
+test.beforeEach(() => {
+  process.env.ELAN_AI_DISABLE_LLM = "true";
 });
 
 test("acepta webhook WAHA valido por sesion permitida aunque no envie secreto", async () => {
