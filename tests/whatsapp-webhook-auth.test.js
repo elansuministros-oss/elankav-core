@@ -33,8 +33,9 @@ function buildWahaEvent(session = "ELANKAV", patch = {}) {
       chatId: payloadPatch.chatId || "50588889999@c.us",
       from: payloadPatch.from || "50588889999@c.us",
       fromMe: payloadPatch.fromMe ?? false,
-      type: "chat",
-      body: payloadPatch.body || "Hola",
+      type: payloadPatch.type || "chat",
+      body: payloadPatch.body ?? "Hola",
+      hasMedia: payloadPatch.hasMedia ?? false,
       timestamp: payloadPatch.timestamp || 1783344000,
     },
   };
@@ -182,4 +183,27 @@ test("ignora fromMe=true para respuesta automatica", async () => {
   assert.equal(result.status, 200);
   assert.equal(result.payload.salesEngine.shouldReply, false);
   assert.equal(result.payload.reply.skipped, true);
+});
+
+test("acepta foto sin texto y genera respuesta automatica", async () => {
+  process.env.WAHA_WEBHOOK_SECRET = "secret-configurado-en-vercel";
+  process.env.WAHA_SESSION = "ELANKAV";
+  delete process.env.WAHA_WEBHOOK_REQUIRE_SECRET;
+  delete process.env.WAHA_BASE_URL;
+
+  const result = await callWebhook({
+    body: buildWahaEvent("ELANKAV", {
+      payload: {
+        id: "photo-no-text-001",
+        body: "",
+        type: "image",
+        hasMedia: true,
+        timestamp: 1783344004,
+      },
+    }),
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.payload.salesEngine.shouldReply, true);
+  assert.match(result.payload.salesEngine.responseText, /Gracias por la foto/i);
 });
