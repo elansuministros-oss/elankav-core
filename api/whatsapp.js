@@ -1,6 +1,7 @@
 import { saveLeadFromWahaEvent } from '../lib/whatsapp/lead-service.js';
 import { getSessionStatus, getWahaRuntimeConfig, sendFile, sendText } from '../lib/whatsapp/waha-client.js';
 import { isValidWahaEvent, normalizeWahaEvent } from '../lib/whatsapp/waha-normalizer.js';
+import { processSalesConversation } from '../lib/elan-sales-engine/index.js';
 
 function getRoute(req) {
   const url = new URL(req.url || '/api/whatsapp', 'https://elankav-core.local');
@@ -105,16 +106,49 @@ async function handleWebhook(req, res) {
     }
 
     const normalized = normalizeWahaEvent(event);
-    const leadResult = await saveLeadFromWahaEvent(normalized);
+    const salesResult = await processSalesConversation({ normalized });
+    const leadResult = await saveLeadFromWahaEvent(normalized, salesResult);
+
+    let replyResult = {
+      ok: true,
+      skipped: true,
+      reason: salesResult.shouldReply ? 'Respuesta vacia' : 'Evento no requiere respuesta',
+    };
+
+    if (salesResult.shouldReply && salesResult.responseText) {
+      try {
+        replyResult = await sendText({
+          chatId: normalized.chatId,
+          text: salesResult.responseText,
+        });
+      } catch (error) {
+        replyResult = {
+          ok: false,
+          error: error.message || 'No se pudo enviar respuesta WAHA',
+        };
+      }
+    }
 
     return res.status(200).json({
       ok: true,
       received: true,
       normalized,
+      salesEngine: {
+        ok: salesResult.ok,
+        shouldReply: salesResult.shouldReply,
+        responseText: salesResult.responseText,
+        analysis: salesResult.analysis,
+      },
       lead: {
         ok: leadResult.ok,
+        updated: Boolean(leadResult.updated),
         skipped: Boolean(leadResult.skipped),
         error: leadResult.error || null,
+      },
+      reply: {
+        ok: replyResult.ok,
+        skipped: Boolean(replyResult.skipped),
+        error: replyResult.error || null,
       },
     });
   } catch (error) {

@@ -144,7 +144,9 @@ export default function App() {
           <h2>Seguridad del sistema</h2>
           <p>La contraseña actual se cambia en Vercel por seguridad.</p>
 
-          <TestSupabase />`n`n          <div className="admin-grid">
+          <TestSupabase />
+
+          <div className="admin-grid">
             <article>
               <strong>Cambiar contraseña</strong>
               <p>Editar variable KAVTORE_ADMIN_PASS en Vercel y hacer Redeploy.</p>
