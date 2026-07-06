@@ -1,0 +1,61 @@
+{
+  "version": "1.0",
+  "currency": "USD",
+
+  "products": [
+    {
+      "id": "boton-60-transparente",
+      "category": "boton-luminoso",
+      "name": "Botón luminoso acrílico transparente 60x60 cm",
+      "price": 130,
+      "unit": "unidad",
+      "includesInstallation": false,
+      "active": true
+    },
+    {
+      "id": "boton-60-color",
+      "category": "boton-luminoso",
+      "name": "Botón luminoso fondo color 60x60 cm",
+      "price": 160,
+      "unit": "unidad",
+      "includesInstallation": false,
+      "active": true
+    },
+    {
+      "id": "boton-80",
+      "category": "boton-luminoso",
+      "name": "Botón luminoso 80x80 cm",
+      "price": 160,
+      "unit": "unidad",
+      "includesInstallation": false,
+      "active": true
+    },
+    {
+      "id": "boton-50",
+      "category": "boton-luminoso",
+      "name": "Botón luminoso 50x50 cm",
+      "price": 110,
+      "unit": "unidad",
+      "includesInstallation": false,
+      "active": true
+    },
+    {
+      "id": "jalavista-60",
+      "category": "rotulo-establecido",
+      "name": "Jalavista doble cara 60x60 cm",
+      "price": 260,
+      "unit": "unidad",
+      "includesInstallation": false,
+      "active": true
+    },
+    {
+      "id": "rotulo-t-poste",
+      "category": "rotulo-establecido",
+      "name": "Rótulo tipo T con lona traslúcida",
+      "price": 560,
+      "unit": "unidad",
+      "includesInstallation": false,
+      "active": true
+    }
+  ]
+}

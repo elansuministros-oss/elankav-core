@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "defaultTechnology": "ecosolvente",
+
+  "rules": [
+    {
+      "priority": 1,
+      "when": {
+        "placement": "exterior"
+      },
+      "technology": "uv",
+      "reason": "Todo proyecto para exterior debe recomendar impresión UV por mayor resistencia."
+    },
+
+    {
+      "priority": 2,
+      "when": {
+        "keywords": [
+          "pvc",
+          "sintra"
+        ]
+      },
+      "technology": "uv",
+      "reason": "El PVC normalmente se produce con impresión UV."
+    },
+
+    {
+      "priority": 3,
+      "when": {
+        "keywords": [
+          "acrilico",
+          "acrílico",
+          "acm",
+          "dibond",
+          "panel"
+        ]
+      },
+      "technology": "uv",
+      "reason": "Los materiales rígidos utilizan impresión UV."
+    },
+
+    {
+      "priority": 4,
+      "when": {
+        "keywords": [
+          "vinil",
+          "vinilo",
+          "sticker",
+          "adhesivo",
+          "microperforado",
+          "lona",
+          "banner"
+        ]
+      },
+      "technology": "ecosolvente",
+      "reason": "Material flexible recomendado para impresión ecosolvente."
+    }
+  ]
+}

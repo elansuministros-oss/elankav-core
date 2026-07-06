@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "currency": "USD",
+  "technologies": [
+    {
+      "id": "ecosolvente",
+      "name": "Impresión Ecosolvente",
+      "recommendedFor": [
+        "interior",
+        "vinil",
+        "lona",
+        "microperforado",
+        "adhesivos"
+      ],
+      "description": "Tecnología de impresión de alta calidad para publicidad general.",
+      "advantages": [
+        "Excelente calidad",
+        "Buen costo",
+        "Ideal para publicidad comercial"
+      ]
+    },
+    {
+      "id": "uv",
+      "name": "Impresión UV",
+      "recommendedFor": [
+        "exterior",
+        "pvc",
+        "acrilico",
+        "acm",
+        "señalizacion",
+        "alto desgaste"
+      ],
+      "description": "Tecnología de impresión UV para proyectos exteriores y materiales rígidos.",
+      "advantages": [
+        "Mayor resistencia",
+        "Mayor durabilidad",
+        "Alta resistencia al sol y lluvia"
+      ]
+    }
+  ]
+}
