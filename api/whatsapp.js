@@ -1,11 +1,10 @@
-import { saveLeadFromWahaEvent } from '../../lib/whatsapp/lead-service.js';
-import { getSessionStatus, getWahaRuntimeConfig, sendFile, sendText } from '../../lib/whatsapp/waha-client.js';
-import { isValidWahaEvent, normalizeWahaEvent } from '../../lib/whatsapp/waha-normalizer.js';
+import { saveLeadFromWahaEvent } from '../lib/whatsapp/lead-service.js';
+import { getSessionStatus, getWahaRuntimeConfig, sendFile, sendText } from '../lib/whatsapp/waha-client.js';
+import { isValidWahaEvent, normalizeWahaEvent } from '../lib/whatsapp/waha-normalizer.js';
 
 function getRoute(req) {
-  const value = req.query?.route;
-  if (Array.isArray(value)) return value.join('/');
-  return String(value || '').replace(/^\/+|\/+$/g, '');
+  const url = new URL(req.url || '/api/whatsapp', 'https://elankav-core.local');
+  return url.pathname.replace(/^\/api\/whatsapp\/?/, '').replace(/^\/+|\/+$/g, '');
 }
 
 function methodNotAllowed(res) {
@@ -14,11 +13,12 @@ function methodNotAllowed(res) {
 
 function getIncomingSecret(req) {
   const authorization = String(req.headers.authorization || '');
+  const url = new URL(req.url || '/api/whatsapp', 'https://elankav-core.local');
 
   return (
     req.headers['x-waha-secret'] ||
     req.headers['x-webhook-secret'] ||
-    req.query?.secret ||
+    url.searchParams.get('secret') ||
     (authorization.startsWith('Bearer ') ? authorization.slice(7) : '')
   );
 }
