@@ -1,6 +1,11 @@
 import { saveLeadFromWahaEvent } from '../lib/whatsapp/lead-service.js';
 import { getSessionStatus, getWahaRuntimeConfig, sendFile, sendText } from '../lib/whatsapp/waha-client.js';
 import { isValidWahaEvent, normalizeWahaEvent } from '../lib/whatsapp/waha-normalizer.js';
+import {
+  checkAndRememberWebhookReply,
+  getAutoReplySkipReason,
+  isAutoReplyEvent,
+} from '../lib/whatsapp/webhook-idempotency.js';
 import { processSalesConversation } from '../lib/elan-sales-engine/index.js';
 
 function getRoute(req) {
@@ -148,16 +153,36 @@ async function handleWebhook(req, res) {
     }
 
     const normalized = normalizeWahaEvent(event);
-    const salesResult = await processSalesConversation({ normalized });
+    const canAutoReply = isAutoReplyEvent(normalized);
+    const idempotency = canAutoReply
+      ? checkAndRememberWebhookReply(normalized)
+      : { duplicate: false, duplicateKey: '', keys: [] };
+
+    const salesResult =
+      canAutoReply && !idempotency.duplicate
+        ? await processSalesConversation({ normalized })
+        : {
+            ok: true,
+            shouldReply: false,
+            responseText: '',
+            analysis: {
+              reason: idempotency.duplicate ? 'mensaje_ya_procesado' : getAutoReplySkipReason(normalized),
+            },
+          };
+
     const leadResult = await saveLeadFromWahaEvent(normalized, salesResult);
 
     let replyResult = {
       ok: true,
       skipped: true,
-      reason: salesResult.shouldReply ? 'Respuesta vacia' : 'Evento no requiere respuesta',
+      reason: idempotency.duplicate
+        ? 'Mensaje ya procesado; no se reenvia respuesta'
+        : salesResult.shouldReply
+          ? 'Respuesta vacia'
+          : 'Evento no requiere respuesta',
     };
 
-    if (salesResult.shouldReply && salesResult.responseText) {
+    if (canAutoReply && !idempotency.duplicate && salesResult.shouldReply && salesResult.responseText) {
       try {
         replyResult = await sendText({
           chatId: normalized.chatId,
@@ -180,6 +205,11 @@ async function handleWebhook(req, res) {
         shouldReply: salesResult.shouldReply,
         responseText: salesResult.responseText,
         analysis: salesResult.analysis,
+      },
+      idempotency: {
+        duplicate: Boolean(idempotency.duplicate),
+        duplicateKey: idempotency.duplicateKey || null,
+        keys: idempotency.keys || [],
       },
       lead: {
         ok: leadResult.ok,

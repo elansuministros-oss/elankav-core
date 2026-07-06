@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import handler from "../api/whatsapp.js";
+import { clearWebhookReplyMemory } from "../lib/whatsapp/webhook-idempotency.js";
 
 const ORIGINAL_ENV = {
   WAHA_WEBHOOK_SECRET: process.env.WAHA_WEBHOOK_SECRET,
@@ -20,18 +21,21 @@ function restoreEnv() {
   }
 }
 
-function buildWahaEvent(session = "ELANKAV") {
+function buildWahaEvent(session = "ELANKAV", patch = {}) {
+  const payloadPatch = patch.payload || {};
+
   return {
-    event: "message",
+    event: patch.event || "message",
+    id: patch.id || `evt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     session,
     payload: {
-      id: `auth-test-${Date.now()}`,
-      chatId: "50588889999@c.us",
-      from: "50588889999@c.us",
-      fromMe: false,
+      id: payloadPatch.id || `auth-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      chatId: payloadPatch.chatId || "50588889999@c.us",
+      from: payloadPatch.from || "50588889999@c.us",
+      fromMe: payloadPatch.fromMe ?? false,
       type: "chat",
-      body: "Hola",
-      timestamp: 1783344000,
+      body: payloadPatch.body || "Hola",
+      timestamp: payloadPatch.timestamp || 1783344000,
     },
   };
 }
@@ -62,7 +66,10 @@ async function callWebhook({ body, headers = {} } = {}) {
   return result;
 }
 
-test.afterEach(restoreEnv);
+test.afterEach(() => {
+  restoreEnv();
+  clearWebhookReplyMemory();
+});
 
 test("acepta webhook WAHA valido por sesion permitida aunque no envie secreto", async () => {
   process.env.WAHA_WEBHOOK_SECRET = "secret-configurado-en-vercel";
@@ -103,4 +110,76 @@ test("mantiene compatibilidad con header secreto correcto", async () => {
 
   assert.equal(result.status, 200);
   assert.equal(result.payload.ok, true);
+});
+
+test("ignora message.any para respuesta automatica", async () => {
+  process.env.WAHA_WEBHOOK_SECRET = "secret-configurado-en-vercel";
+  process.env.WAHA_SESSION = "ELANKAV";
+  delete process.env.WAHA_WEBHOOK_REQUIRE_SECRET;
+  delete process.env.WAHA_BASE_URL;
+
+  const result = await callWebhook({
+    body: buildWahaEvent("ELANKAV", {
+      event: "message.any",
+      payload: {
+        id: "dup-any-001",
+        body: "Hola, quiero un boton luminoso",
+        timestamp: 1783344001,
+      },
+    }),
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.payload.salesEngine.shouldReply, false);
+  assert.equal(result.payload.reply.skipped, true);
+  assert.equal(result.payload.salesEngine.analysis.reason, "Evento WAHA ignorado para respuesta automatica");
+});
+
+test("marca duplicado y no reenvia respuesta por messageId", async () => {
+  process.env.WAHA_WEBHOOK_SECRET = "secret-configurado-en-vercel";
+  process.env.WAHA_SESSION = "ELANKAV";
+  delete process.env.WAHA_WEBHOOK_REQUIRE_SECRET;
+  delete process.env.WAHA_BASE_URL;
+
+  const body = buildWahaEvent("ELANKAV", {
+    id: "evt-dup-message",
+    payload: {
+      id: "msg-dup-001",
+      body: "Hola, quiero un boton luminoso",
+      timestamp: 1783344002,
+    },
+  });
+
+  const first = await callWebhook({ body });
+  const second = await callWebhook({ body });
+
+  assert.equal(first.status, 200);
+  assert.equal(first.payload.salesEngine.shouldReply, true);
+  assert.equal(first.payload.idempotency.duplicate, false);
+
+  assert.equal(second.status, 200);
+  assert.equal(second.payload.salesEngine.shouldReply, false);
+  assert.equal(second.payload.idempotency.duplicate, true);
+  assert.equal(second.payload.reply.skipped, true);
+});
+
+test("ignora fromMe=true para respuesta automatica", async () => {
+  process.env.WAHA_WEBHOOK_SECRET = "secret-configurado-en-vercel";
+  process.env.WAHA_SESSION = "ELANKAV";
+  delete process.env.WAHA_WEBHOOK_REQUIRE_SECRET;
+
+  const result = await callWebhook({
+    body: buildWahaEvent("ELANKAV", {
+      payload: {
+        id: "from-me-001",
+        fromMe: true,
+        body: "Mensaje propio",
+        timestamp: 1783344003,
+      },
+    }),
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.payload.salesEngine.shouldReply, false);
+  assert.equal(result.payload.reply.skipped, true);
 });
