@@ -79,6 +79,72 @@ function isAuthorized(req, event = {}) {
   return isValidWahaEvent(event) && Boolean(session) && expectedSessions.includes(session);
 }
 
+function normalizeInternalAlertChatId(value = '') {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.includes('@') ? digits : `${digits}@c.us`;
+}
+
+function getHumanAlertChatId() {
+  return normalizeInternalAlertChatId(process.env.ELAN_AI_HUMAN_ALERT_PHONE);
+}
+
+function buildHumanAlertMessage(normalized = {}, salesResult = {}) {
+  const analysis = salesResult.analysis || {};
+  const handoff = analysis.humanHandoff || {};
+  const customer = analysis.customerProfile || {};
+  const product = analysis.product?.primaryProduct || {};
+  const memory = analysis.memory || {};
+
+  return [
+    '🚨 ALERTA ELAN AI',
+    '',
+    'Un cliente requiere atención humana.',
+    '',
+    `Motivo: ${handoff.label || handoff.reason || 'Revisión requerida'}`,
+    `Prioridad: ${handoff.priority || 'media'}`,
+    `Cliente: ${customer.name || 'Sin nombre registrado'}`,
+    `WhatsApp: ${customer.phone || normalized.customerPhone || normalized.from || normalized.chatId || 'No disponible'}`,
+    product.name || product.serviceName ? `Producto: ${product.name || product.serviceName}` : '',
+    memory.measure ? `Medida: ${memory.measure}` : '',
+    memory.placement ? `Ubicación de instalación: ${memory.placement}` : '',
+    memory.location ? `Ciudad / referencia: ${memory.location}` : '',
+    '',
+    `Último mensaje: "${normalized.body || '[mensaje multimedia o sin texto]'}"`,
+    '',
+    'Acción sugerida: revisar el chat y tomar control si corresponde.',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+async function sendHumanHandoffAlert(normalized = {}, salesResult = {}) {
+  const handoff = salesResult.analysis?.humanHandoff;
+
+  if (!handoff?.required) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'No requiere alerta humana',
+    };
+  }
+
+  const alertChatId = getHumanAlertChatId();
+
+  if (!alertChatId) {
+    return {
+      ok: false,
+      skipped: true,
+      error: 'ELAN_AI_HUMAN_ALERT_PHONE no configurado',
+    };
+  }
+
+  return sendText({
+    chatId: alertChatId,
+    text: buildHumanAlertMessage(normalized, salesResult),
+  });
+}
+
 async function handleStatus(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res);
 
@@ -172,6 +238,24 @@ async function handleWebhook(req, res) {
 
     const leadResult = await saveLeadFromWahaEvent(normalized, salesResult);
 
+    let alertResult = {
+      ok: true,
+      skipped: true,
+      reason: 'Alerta humana no requerida',
+    };
+
+    if (canAutoReply && !idempotency.duplicate) {
+      try {
+        alertResult = await sendHumanHandoffAlert(normalized, salesResult);
+      } catch (error) {
+        alertResult = {
+          ok: false,
+          skipped: false,
+          error: error.message || 'No se pudo enviar alerta humana',
+        };
+      }
+    }
+
     let replyResult = {
       ok: true,
       skipped: true,
@@ -216,6 +300,12 @@ async function handleWebhook(req, res) {
         updated: Boolean(leadResult.updated),
         skipped: Boolean(leadResult.skipped),
         error: leadResult.error || null,
+      },
+      alert: {
+        ok: alertResult.ok,
+        skipped: Boolean(alertResult.skipped),
+        reason: alertResult.reason || null,
+        error: alertResult.error || null,
       },
       reply: {
         ok: replyResult.ok,
