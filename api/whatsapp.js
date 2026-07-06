@@ -4,7 +4,8 @@ import { isValidWahaEvent, normalizeWahaEvent } from '../lib/whatsapp/waha-norma
 
 function getRoute(req) {
   const url = new URL(req.url || '/api/whatsapp', 'https://elankav-core.local');
-  return url.pathname.replace(/^\/api\/whatsapp\/?/, '').replace(/^\/+|\/+$/g, '');
+  const pathRoute = url.pathname.replace(/^\/api\/whatsapp\/?/, '').replace(/^\/+|\/+$/g, '');
+  return pathRoute || url.searchParams.get('action') || 'status';
 }
 
 function methodNotAllowed(res) {
