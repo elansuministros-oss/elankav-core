@@ -1,9 +1,30 @@
-﻿import { createClient } from "@supabase/supabase-js"
+import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+function cleanEnv(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '');
+}
 
-export const supabase = createClient(
-  supabaseUrl,
-  supabaseKey
-)
+const supabaseUrl = cleanEnv(import.meta.env.VITE_SUPABASE_URL).replace(/\/+$/, '');
+const supabaseKey = cleanEnv(import.meta.env.VITE_SUPABASE_ANON_KEY);
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('SUPABASE_PUBLIC_CONFIG_MISSING');
+}
+
+if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl)) {
+  throw new Error('SUPABASE_PUBLIC_URL_INVALID');
+}
+
+if (supabaseKey.length < 80) {
+  throw new Error('SUPABASE_PUBLIC_KEY_INVALID');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false
+  }
+});
