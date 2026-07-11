@@ -2,11 +2,13 @@
 import CentroIA from './pages/CentroIA';
 import TestSupabase from './pages/TestSupabase';
 import AI23CentroCostos from './pages/AI23CentroCostos';
+import CRMCore from './pages/CRMCore';
 import { cargarDatosCRM, calcularEstadoGlobal, construirReporteEjecutivo } from './core/CentralBridge';
 import './App.css';
 
 const MODULOS = [
   { id: 'ia', titulo: 'Centro IA', detalle: 'Preguntar y decidir' },
+  { id: 'crm', titulo: 'CRM Core', detalle: 'Contactos y conversaciones' },
   { id: 'ai23', titulo: 'AI-23 Costos', detalle: 'Centro de Costos ELAN' },
   { id: 'operacion', titulo: 'Operación', detalle: 'Pedidos y cobros' },
   { id: 'whatsapp', titulo: 'WhatsApp', detalle: 'Leads y seguimiento' },
@@ -134,6 +136,7 @@ export default function App() {
         />
       )}
 
+      {modulo === 'crm' && <CRMCore authToken={token} />}
       {modulo === 'ai23' && <AI23CentroCostos />}
 
       {modulo === 'admin' && (
@@ -168,7 +171,7 @@ export default function App() {
         </section>
       )}
 
-      {modulo !== 'ia' && modulo !== 'ai23' && modulo !== 'admin' && (
+      {modulo !== 'ia' && modulo !== 'crm' && modulo !== 'ai23' && modulo !== 'admin' && (
         <section className="module-card">
           <span>{moduloActivo.titulo}</span>
           <h2>{moduloActivo.titulo}</h2>
