@@ -1,0 +1,108 @@
+name: ORCH-036 Integrate Identity Service
+
+on:
+  push:
+    paths:
+      - '.github/workflows/orch-036-integrate-identity.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Apply verified bridge integration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('api/whatsapp.js')
+          source = path.read_text(encoding='utf-8')
+
+          import_line = "import { resolveWhatsAppIdentity } from '../services/whatsappIdentityService.js';\n\n"
+          if import_line not in source:
+              source = import_line + source
+
+          audit_block = """    console.log('WAHA_IDENTITY_AUDIT', {
+              event: incoming.event,
+              senderRaw: incoming.senderRaw || null,
+              phone: incoming.phone || null,
+              chatId: incoming.chatId || null,
+              fromMe: incoming.fromMe
+            });
+
+          """
+          if audit_block not in source:
+              raise SystemExit('No se encontró el bloque diagnóstico esperado')
+          source = source.replace(audit_block, '', 1)
+
+          old_call = """    const orchestrator =
+              await callOrchestrator({
+                message: incoming.text,
+                phone: incoming.phone,
+                session: incoming.session,
+                rawEvent: incoming.event,
+                senderRaw: incoming.senderRaw
+              });
+          """
+          new_call = """    const identity = resolveWhatsAppIdentity({
+              senderRaw: incoming.senderRaw,
+              phone: incoming.phone
+            });
+
+            const orchestrator =
+              await callOrchestrator({
+                message: incoming.text,
+                phone: identity.canonicalId,
+                session: incoming.session,
+                rawEvent: incoming.event,
+                senderRaw: incoming.senderRaw
+              });
+          """
+          if old_call not in source:
+              raise SystemExit('No se encontró la llamada esperada al Orchestrator')
+          source = source.replace(old_call, new_call, 1)
+
+          old_response = """      phone: incoming.phone,
+              senderRaw: incoming.senderRaw,
+              ownerMode:
+          """
+          new_response = """      phone: identity.canonicalId,
+              senderRaw: incoming.senderRaw,
+              identity: {
+                receivedId: identity.receivedId,
+                canonicalId: identity.canonicalId,
+                name: identity.name,
+                entityType: identity.entityType,
+                roles: identity.roles,
+                matched: identity.matched,
+                source: identity.source
+              },
+              ownerMode:
+          """
+          if old_response not in source:
+              raise SystemExit('No se encontró el bloque de respuesta esperado')
+          source = source.replace(old_response, new_response, 1)
+
+          source = source.replace("version: 'ORCH-033C'", "version: 'ORCH-036B'", 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+
+          node --check api/whatsapp.js
+          node --check services/whatsappIdentityService.js
+          git diff --check
+
+      - name: Commit integration
+        shell: bash
+        run: |
+          git config user.name "ELANKAV Orchestrator"
+          git config user.email "actions@elankav.com"
+          git add api/whatsapp.js
+          git commit -m "ORCH-036B integra Identity Service en WhatsApp Bridge"
+          git push origin main
