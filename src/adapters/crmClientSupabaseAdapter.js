@@ -1,66 +1,63 @@
-import { supabase, supabaseConfig } from '../lib/supabase';
+async function requestCrmApi(authToken, options = {}) {
+  const token = String(authToken || '').trim();
 
-function requireSupabase() {
-  if (!supabaseConfig?.ready || !supabase) {
-    throw new Error(supabaseConfig?.error || 'SUPABASE_PUBLIC_CONFIG_MISSING');
+  if (!token) {
+    throw new Error('CRM_ADMIN_TOKEN_MISSING');
   }
 
-  return supabase;
-}
+  const response = await fetch('/api/crm', {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
 
-async function listRecent(table, columns, limit = 25) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from(table)
-    .select(columns)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const data = await response.json().catch(() => null);
 
-  if (error) throw error;
-  return data || [];
-}
+  if (!response.ok || !data?.ok) {
+    const error = new Error(
+      data?.error ||
+      `CRM_API_HTTP_${response.status}`
+    );
 
-async function listIdentities() {
-  return listRecent(
-    'crm_identities',
-    'id,canonical_id,display_name,entity_type,created_at'
-  );
-}
+    error.status = data?.status || 'ERROR';
+    error.details = data;
+    throw error;
+  }
 
-async function listConversations() {
-  return listRecent(
-    'crm_conversations',
-    'id,identity_id,channel,platform,stage,status,created_at'
-  );
-}
-
-async function listMessages() {
-  return listRecent(
-    'crm_messages',
-    'id,conversation_id,direction,body,status,created_at'
-  );
-}
-
-async function createIdentity({ displayName, canonicalId, entityType }) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from('crm_identities')
-    .insert({
-      canonical_id: canonicalId,
-      display_name: displayName,
-      entity_type: entityType,
-      metadata: { source: 'crm-ui-validation' }
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
   return data;
 }
 
+async function loadDashboard(authToken) {
+  return requestCrmApi(authToken, {
+    method: 'GET'
+  });
+}
+
+async function createIdentity(
+  {
+    displayName,
+    canonicalId,
+    entityType
+  },
+  authToken
+) {
+  const result = await requestCrmApi(authToken, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'create_identity',
+      displayName,
+      canonicalId,
+      entityType
+    })
+  });
+
+  return result.identity;
+}
+
 export {
-  listIdentities,
-  listConversations,
-  listMessages,
-  createIdentity
+  createIdentity,
+  loadDashboard
 };

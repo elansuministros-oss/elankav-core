@@ -90,3 +90,31 @@ create index if not exists idx_crm_alias_external on crm_identity_aliases(channe
 create index if not exists idx_crm_conversations_identity on crm_conversations(identity_id, status);
 create index if not exists idx_crm_messages_conversation_created on crm_messages(conversation_id, created_at);
 create index if not exists idx_crm_roles_identity on crm_roles(identity_id, active);
+
+-- CRM-040A — Seguridad del CRM
+-- El navegador no accede directamente a estas tablas.
+-- Las operaciones se realizan mediante /api/crm y service_role.
+
+alter table public.crm_identities enable row level security;
+alter table public.crm_identity_aliases enable row level security;
+alter table public.crm_roles enable row level security;
+alter table public.crm_organizations enable row level security;
+alter table public.crm_identity_organizations enable row level security;
+alter table public.crm_conversations enable row level security;
+alter table public.crm_messages enable row level security;
+
+revoke all on table public.crm_identities from anon, authenticated;
+revoke all on table public.crm_identity_aliases from anon, authenticated;
+revoke all on table public.crm_roles from anon, authenticated;
+revoke all on table public.crm_organizations from anon, authenticated;
+revoke all on table public.crm_identity_organizations from anon, authenticated;
+revoke all on table public.crm_conversations from anon, authenticated;
+revoke all on table public.crm_messages from anon, authenticated;
+
+grant all on table public.crm_identities to service_role;
+grant all on table public.crm_identity_aliases to service_role;
+grant all on table public.crm_roles to service_role;
+grant all on table public.crm_organizations to service_role;
+grant all on table public.crm_identity_organizations to service_role;
+grant all on table public.crm_conversations to service_role;
+grant all on table public.crm_messages to service_role;

@@ -1,8 +1,6 @@
 import {
   createIdentity,
-  listConversations,
-  listIdentities,
-  listMessages
+  loadDashboard
 } from '../adapters/crmClientSupabaseAdapter';
 
 function classifyError(error) {
@@ -10,9 +8,17 @@ function classifyError(error) {
   const normalized = message.toLowerCase();
 
   if (
-    normalized.includes('supabase_public_config_missing') ||
-    normalized.includes('supabase_public_url_invalid') ||
-    normalized.includes('supabase_public_key_invalid') ||
+    normalized.includes('crm_admin_token_missing') ||
+    normalized.includes('crm_unauthorized')
+  ) {
+    return {
+      status: 'ACCESS_DENIED',
+      message
+    };
+  }
+
+  if (
+    normalized.includes('crm_supabase_server_config_missing') ||
     normalized.includes('invalid api key')
   ) {
     return {
@@ -44,34 +50,17 @@ function classifyError(error) {
   }
 
   return {
-    status: 'ERROR',
+    status: error?.status || 'ERROR',
     message
   };
 }
 
-async function loadCrmDashboard() {
+async function loadCrmDashboard(authToken) {
   try {
-    const [identities, conversations, messages] = await Promise.all([
-      listIdentities(),
-      listConversations(),
-      listMessages()
-    ]);
-
-    return {
-      ok: true,
-      status: 'READY',
-      version: 'CRM-001J',
-      identities,
-      conversations,
-      messages,
-      counts: {
-        identities: identities.length,
-        conversations: conversations.length,
-        messages: messages.length
-      }
-    };
+    return await loadDashboard(authToken);
   } catch (error) {
     const classified = classifyError(error);
+
     return {
       ok: false,
       status: classified.status,
@@ -88,9 +77,10 @@ async function loadCrmDashboard() {
   }
 }
 
-async function createCrmIdentity(input) {
+async function createCrmIdentity(input, authToken) {
   try {
-    const identity = await createIdentity(input);
+    const identity = await createIdentity(input, authToken);
+
     return {
       ok: true,
       status: 'READY',
@@ -98,6 +88,7 @@ async function createCrmIdentity(input) {
     };
   } catch (error) {
     const classified = classifyError(error);
+
     return {
       ok: false,
       status: classified.status,

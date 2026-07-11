@@ -26,7 +26,7 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function CRMCore() {
+export default function CRMCore({ authToken }) {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState('LOADING');
   const [error, setError] = useState('');
@@ -38,7 +38,7 @@ export default function CRMCore() {
     setLoading(true);
     setError('');
 
-    const result = await loadCrmDashboard();
+    const result = await loadCrmDashboard(authToken);
     setData(result);
     setStatus(result.status || 'ERROR');
 
@@ -51,7 +51,7 @@ export default function CRMCore() {
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+  }, [authToken]);
 
   const createContact = async (event) => {
     event.preventDefault();
@@ -59,7 +59,7 @@ export default function CRMCore() {
     setError('');
     setCreated(null);
 
-    const result = await createCrmIdentity(form);
+    const result = await createCrmIdentity(form, authToken);
     setStatus(result.status || 'ERROR');
 
     if (!result.ok) {
