@@ -10,6 +10,18 @@ function classifyError(error) {
   const normalized = message.toLowerCase();
 
   if (
+    normalized.includes('supabase_public_config_missing') ||
+    normalized.includes('supabase_public_url_invalid') ||
+    normalized.includes('supabase_public_key_invalid') ||
+    normalized.includes('invalid api key')
+  ) {
+    return {
+      status: 'CONFIG_PENDING',
+      message
+    };
+  }
+
+  if (
     normalized.includes('does not exist') ||
     normalized.includes('could not find the table') ||
     normalized.includes('relation')
@@ -48,7 +60,7 @@ async function loadCrmDashboard() {
     return {
       ok: true,
       status: 'READY',
-      version: 'CRM-001G',
+      version: 'CRM-001J',
       identities,
       conversations,
       messages,
