@@ -4,6 +4,9 @@ const DEFAULT_ORCHESTRATOR_URL =
 const DEFAULT_WAHA_URL =
   'https://waha.elankav.com';
 
+const OWNER_PHONE = '50588388940';
+const SESSION_PHONE = '50578828089';
+
 function json(res, status, payload) {
   res.status(status).json(payload);
 }
@@ -24,6 +27,125 @@ function normalizePhone(value) {
   return raw;
 }
 
+function collectIdentityCandidates(
+  value,
+  output = [],
+  depth = 0
+) {
+  if (depth > 6 || value == null) {
+    return output;
+  }
+
+  if (typeof value === 'string') {
+    if (
+      value.includes('@c.us') ||
+      value.includes('@lid') ||
+      /^\+?\d[\d\s()-]{7,}$/.test(value)
+    ) {
+      output.push(value);
+    }
+
+    return output;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectIdentityCandidates(
+        item,
+        output,
+        depth + 1
+      );
+    }
+
+    return output;
+  }
+
+  if (typeof value === 'object') {
+    for (const item of Object.values(value)) {
+      collectIdentityCandidates(
+        item,
+        output,
+        depth + 1
+      );
+    }
+  }
+
+  return output;
+}
+
+function resolveSender(payload = {}) {
+  const explicitCandidates = [
+    payload.from,
+    payload.author,
+    payload.participant,
+    payload.sender,
+    payload.chatId,
+    payload.key?.remoteJid,
+    payload.key?.participant,
+    payload.id?.remote,
+    payload.id?.participant,
+    payload._data?.from,
+    payload._data?.author,
+    payload._data?.participant,
+    payload._data?.id?.remote,
+    payload._data?.id?.participant,
+    payload.message?.key?.remoteJid,
+    payload.message?.key?.participant
+  ].filter(Boolean);
+
+  const discoveredCandidates =
+    collectIdentityCandidates(payload);
+
+  const allCandidates = [
+    ...explicitCandidates,
+    ...discoveredCandidates
+  ];
+
+  const normalized = allCandidates
+    .map(value => ({
+      raw: String(value),
+      phone: normalizePhone(value),
+      isCus: String(value).includes('@c.us'),
+      isLid: String(value).includes('@lid')
+    }))
+    .filter(item => item.phone);
+
+  const preferred = normalized.find(
+    item =>
+      item.phone !== SESSION_PHONE &&
+      item.isCus
+  );
+
+  if (preferred) {
+    return preferred;
+  }
+
+  const owner = normalized.find(
+    item => item.phone === OWNER_PHONE
+  );
+
+  if (owner) {
+    return owner;
+  }
+
+  const nonSession = normalized.find(
+    item =>
+      item.phone !== SESSION_PHONE &&
+      !item.isLid
+  );
+
+  if (nonSession) {
+    return nonSession;
+  }
+
+  return normalized[0] || {
+    raw: '',
+    phone: '',
+    isCus: false,
+    isLid: false
+  };
+}
+
 function extractText(payload = {}) {
   return String(
     payload.body ||
@@ -33,6 +155,8 @@ function extractText(payload = {}) {
     payload.message?.extendedTextMessage?.text ||
     payload.message?.imageMessage?.caption ||
     payload.message?.videoMessage?.caption ||
+    payload._data?.body ||
+    payload._data?.caption ||
     ''
   ).trim();
 }
@@ -43,16 +167,13 @@ function extractIncoming(body = {}) {
       ? body.payload
       : body;
 
-  const chatId =
-    payload.from ||
-    payload.chatId ||
-    payload.to ||
-    payload.key?.remoteJid ||
-    '';
+  const sender = resolveSender(payload);
 
   const fromMe = Boolean(
     payload.fromMe ??
     payload.key?.fromMe ??
+    payload.id?.fromMe ??
+    payload._data?.id?.fromMe ??
     false
   );
 
@@ -62,6 +183,14 @@ function extractIncoming(body = {}) {
     ''
   ).toLowerCase();
 
+  const chatId =
+    sender.raw ||
+    payload.from ||
+    payload.chatId ||
+    payload.key?.remoteJid ||
+    payload._data?.from ||
+    '';
+
   return {
     event,
     session:
@@ -70,7 +199,8 @@ function extractIncoming(body = {}) {
       process.env.WAHA_SESSION ||
       'ELANKAV',
     chatId,
-    phone: normalizePhone(chatId),
+    phone: sender.phone,
+    senderRaw: sender.raw,
     text: extractText(payload),
     fromMe,
     isGroup: String(chatId).includes('@g.us'),
@@ -83,7 +213,8 @@ async function callOrchestrator({
   message,
   phone,
   session,
-  rawEvent
+  rawEvent,
+  senderRaw
 }) {
   const url =
     process.env.ORCHESTRATOR_MESSAGES_URL ||
@@ -104,7 +235,8 @@ async function callOrchestrator({
       metadata: {
         session,
         source: 'waha',
-        event: rawEvent || null
+        event: rawEvent || null,
+        senderRaw: senderRaw || null
       }
     })
   });
@@ -199,6 +331,7 @@ export default async function handler(req, res) {
     return json(res, 200, {
       ok: true,
       service: 'ELANKAV WhatsApp Bridge',
+      version: 'ORCH-033B',
       status: 'READY'
     });
   }
@@ -258,7 +391,12 @@ export default async function handler(req, res) {
       return json(res, 200, {
         ok: true,
         ignored: true,
-        reason: 'MESSAGE_INCOMPLETE'
+        reason: 'MESSAGE_INCOMPLETE',
+        debug: {
+          senderRaw: incoming.senderRaw || null,
+          phone: incoming.phone || null,
+          hasText: Boolean(incoming.text)
+        }
       });
     }
 
@@ -267,7 +405,8 @@ export default async function handler(req, res) {
         message: incoming.text,
         phone: incoming.phone,
         session: incoming.session,
-        rawEvent: incoming.event
+        rawEvent: incoming.event,
+        senderRaw: incoming.senderRaw
       });
 
     const dryRun =
@@ -286,6 +425,7 @@ export default async function handler(req, res) {
       processed: true,
       dryRun,
       phone: incoming.phone,
+      senderRaw: incoming.senderRaw,
       ownerMode:
         Boolean(orchestrator.context?.ownerMode),
       platform:
