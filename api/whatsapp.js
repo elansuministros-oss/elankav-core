@@ -110,8 +110,6 @@ function resolveSender(payload = {}) {
     }))
     .filter(item => item.phone);
 
-  // El número propietario tiene prioridad absoluta si aparece
-  // en cualquier campo del payload real de WAHA.
   const owner = normalized.find(
     item => item.phone === OWNER_PHONE
   );
@@ -348,6 +346,14 @@ export default async function handler(req, res) {
   try {
     const incoming =
       extractIncoming(req.body || {});
+
+    console.log('WAHA_IDENTITY_AUDIT', {
+      event: incoming.event,
+      senderRaw: incoming.senderRaw || null,
+      phone: incoming.phone || null,
+      chatId: incoming.chatId || null,
+      fromMe: incoming.fromMe
+    });
 
     if (
       incoming.event &&
