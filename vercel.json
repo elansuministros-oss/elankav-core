@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/whatsapp",
+      "destination": "/api/whatsapp-v2"
+    }
+  ]
+}
