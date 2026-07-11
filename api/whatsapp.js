@@ -110,6 +110,16 @@ function resolveSender(payload = {}) {
     }))
     .filter(item => item.phone);
 
+  // El número propietario tiene prioridad absoluta si aparece
+  // en cualquier campo del payload real de WAHA.
+  const owner = normalized.find(
+    item => item.phone === OWNER_PHONE
+  );
+
+  if (owner) {
+    return owner;
+  }
+
   const preferred = normalized.find(
     item =>
       item.phone !== SESSION_PHONE &&
@@ -118,14 +128,6 @@ function resolveSender(payload = {}) {
 
   if (preferred) {
     return preferred;
-  }
-
-  const owner = normalized.find(
-    item => item.phone === OWNER_PHONE
-  );
-
-  if (owner) {
-    return owner;
   }
 
   const nonSession = normalized.find(
@@ -331,7 +333,7 @@ export default async function handler(req, res) {
     return json(res, 200, {
       ok: true,
       service: 'ELANKAV WhatsApp Bridge',
-      version: 'ORCH-033B',
+      version: 'ORCH-033C',
       status: 'READY'
     });
   }
