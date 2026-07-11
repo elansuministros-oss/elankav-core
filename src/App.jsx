@@ -1,10 +1,11 @@
-﻿import { useMemo, useState } from 'react';
+﻿import { Suspense, lazy, useMemo, useState } from 'react';
 import CentroIA from './pages/CentroIA';
 import TestSupabase from './pages/TestSupabase';
-import AI23CentroCostos from './pages/AI23CentroCostos';
 import CRMCore from './pages/CRMCore';
 import { cargarDatosCRM, calcularEstadoGlobal, construirReporteEjecutivo } from './core/CentralBridge';
 import './App.css';
+
+const AI23CentroCostos = lazy(() => import('./pages/AI23CentroCostos'));
 
 const MODULOS = [
   { id: 'ia', titulo: 'Centro IA', detalle: 'Preguntar y decidir' },
@@ -42,7 +43,6 @@ export default function App() {
       });
 
       const data = await res.json();
-
       if (!res.ok || !data.ok) throw new Error(data.error || 'Acceso denegado.');
 
       sessionStorage.setItem('kavtore_token', data.token);
@@ -77,7 +77,6 @@ export default function App() {
           <input value={clave} onChange={(e) => setClave(e.target.value)} placeholder="Contraseña" type="password" />
 
           {error && <strong>{error}</strong>}
-
           <button type="submit">Ingresar</button>
         </form>
       </main>
@@ -137,7 +136,11 @@ export default function App() {
       )}
 
       {modulo === 'crm' && <CRMCore authToken={token} />}
-      {modulo === 'ai23' && <AI23CentroCostos />}
+      {modulo === 'ai23' && (
+        <Suspense fallback={<section className="module-card"><h2>Cargando AI-23…</h2></section>}>
+          <AI23CentroCostos />
+        </Suspense>
+      )}
 
       {modulo === 'admin' && (
         <section className="module-card admin-module">
