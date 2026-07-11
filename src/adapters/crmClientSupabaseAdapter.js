@@ -1,7 +1,16 @@
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseConfig } from '../lib/supabase';
+
+function requireSupabase() {
+  if (!supabaseConfig?.ready || !supabase) {
+    throw new Error(supabaseConfig?.error || 'SUPABASE_PUBLIC_CONFIG_MISSING');
+  }
+
+  return supabase;
+}
 
 async function listRecent(table, columns, limit = 25) {
-  const { data, error } = await supabase
+  const client = requireSupabase();
+  const { data, error } = await client
     .from(table)
     .select(columns)
     .order('created_at', { ascending: false })
@@ -33,7 +42,8 @@ async function listMessages() {
 }
 
 async function createIdentity({ displayName, canonicalId, entityType }) {
-  const { data, error } = await supabase
+  const client = requireSupabase();
+  const { data, error } = await client
     .from('crm_identities')
     .insert({
       canonical_id: canonicalId,
