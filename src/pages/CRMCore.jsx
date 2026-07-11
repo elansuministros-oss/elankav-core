@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import './CRMCore.css';
 
 const EMPTY_FORM = {
   displayName: '',
@@ -44,7 +45,7 @@ export default function CRMCore({ authToken }) {
       setStatus(payload.status || 'READY');
     } catch (err) {
       setError(err.message);
-      if (status === 'LOADING') setStatus('ERROR');
+      setStatus((current) => current === 'MIGRATION_PENDING' ? current : 'ERROR');
     } finally {
       setLoading(false);
     }
@@ -120,28 +121,15 @@ export default function CRMCore({ authToken }) {
           <h3>Crear contacto de prueba</h3>
           <label>
             Nombre
-            <input
-              value={form.displayName}
-              onChange={(event) => setForm({ ...form, displayName: event.target.value })}
-              placeholder="Ej. Cliente de prueba"
-              required
-            />
+            <input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} placeholder="Ej. Cliente de prueba" required />
           </label>
           <label>
             Identificador canónico
-            <input
-              value={form.canonicalId}
-              onChange={(event) => setForm({ ...form, canonicalId: event.target.value })}
-              placeholder="Teléfono, correo o ID"
-              required
-            />
+            <input value={form.canonicalId} onChange={(event) => setForm({ ...form, canonicalId: event.target.value })} placeholder="Teléfono, correo o ID" required />
           </label>
           <label>
             Tipo
-            <select
-              value={form.entityType}
-              onChange={(event) => setForm({ ...form, entityType: event.target.value })}
-            >
+            <select value={form.entityType} onChange={(event) => setForm({ ...form, entityType: event.target.value })}>
               <option value="client">Cliente</option>
               <option value="supplier">Proveedor</option>
               <option value="seller">Vendedor</option>
@@ -154,17 +142,11 @@ export default function CRMCore({ authToken }) {
         </form>
 
         <section className="crm-list">
-          <div className="crm-list-head">
-            <h3>Identidades recientes</h3>
-            <span>{data?.identities?.length || 0} registros</span>
-          </div>
+          <div className="crm-list-head"><h3>Identidades recientes</h3><span>{data?.identities?.length || 0} registros</span></div>
           {!data?.identities?.length && <p className="crm-empty">Aún no hay identidades visibles.</p>}
           {data?.identities?.map((identity) => (
             <article key={identity.id}>
-              <div>
-                <strong>{identity.display_name || 'Sin nombre'}</strong>
-                <small>{identity.canonical_id}</small>
-              </div>
+              <div><strong>{identity.display_name || 'Sin nombre'}</strong><small>{identity.canonical_id}</small></div>
               <span>{identity.entity_type}</span>
             </article>
           ))}
@@ -172,20 +154,12 @@ export default function CRMCore({ authToken }) {
       </div>
 
       <section className="crm-table-block">
-        <div className="crm-list-head">
-          <h3>Conversaciones recientes</h3>
-          <span>{data?.conversations?.length || 0} registros</span>
-        </div>
-        {!data?.conversations?.length ? (
-          <p className="crm-empty">Todavía no hay conversaciones conectadas.</p>
-        ) : (
+        <div className="crm-list-head"><h3>Conversaciones recientes</h3><span>{data?.conversations?.length || 0} registros</span></div>
+        {!data?.conversations?.length ? <p className="crm-empty">Todavía no hay conversaciones conectadas.</p> : (
           <div className="crm-table">
             {data.conversations.map((conversation) => (
               <article key={conversation.id}>
-                <strong>{conversation.platform || 'sin plataforma'}</strong>
-                <span>{conversation.channel}</span>
-                <span>{conversation.stage}</span>
-                <span>{conversation.status}</span>
+                <strong>{conversation.platform || 'sin plataforma'}</strong><span>{conversation.channel}</span><span>{conversation.stage}</span><span>{conversation.status}</span>
               </article>
             ))}
           </div>
