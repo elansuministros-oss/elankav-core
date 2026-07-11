@@ -10,19 +10,15 @@ const supabaseUrl = cleanEnv(import.meta.env.VITE_SUPABASE_URL).replace(/\/+$/, 
 const supabaseKey = cleanEnv(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 const urlValid = /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl);
-const legacyJwtKeyValid = supabaseKey.length >= 80 && supabaseKey.split('.').length === 3;
-const publishableKeyValid = /^sb_publishable_[A-Za-z0-9_-]+$/.test(supabaseKey);
-const keyValid = legacyJwtKeyValid || publishableKeyValid;
+const keyPresent = supabaseKey.length > 0;
 
 export const supabaseConfig = {
-  ready: Boolean(supabaseUrl && supabaseKey && urlValid && keyValid),
-  error: !supabaseUrl || !supabaseKey
+  ready: Boolean(supabaseUrl && keyPresent && urlValid),
+  error: !supabaseUrl || !keyPresent
     ? 'SUPABASE_PUBLIC_CONFIG_MISSING'
     : !urlValid
       ? 'SUPABASE_PUBLIC_URL_INVALID'
-      : !keyValid
-        ? 'SUPABASE_PUBLIC_KEY_INVALID'
-        : null
+      : null
 };
 
 export const supabase = supabaseConfig.ready
