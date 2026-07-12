@@ -95,11 +95,16 @@ test('STT Service devuelve transcripción normalizada', async () => {
   assert.equal(result.transcription.text, 'Prueba correcta');
 });
 
-test('Audio Download Service permanece desactivado', async () => {
-  const result = await downloadAudioToTemporaryFile();
+test('Audio Download Service exige URL de media', async () => {
+  const result = await downloadAudioToTemporaryFile(
+    {},
+    {
+      apiKey: 'test-key'
+    }
+  );
 
   assert.equal(result.ok, false);
-  assert.equal(result.status, 'AUDIO_DOWNLOAD_NOT_IMPLEMENTED');
+  assert.equal(result.status, 'AUDIO_MEDIA_URL_MISSING');
 });
 
 test('OpenAI Speech Adapter permanece desactivado', async () => {
