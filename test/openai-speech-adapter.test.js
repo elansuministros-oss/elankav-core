@@ -112,6 +112,57 @@ test('OpenAI Speech detecta archivo inexistente', async () => {
   );
 });
 
+test('OpenAI Speech normaliza extensión oga a ogg', async () => {
+  const originalFetch = globalThis.fetch;
+  const filePath = await createAudioFile();
+
+  globalThis.fetch = async (
+    url,
+    options
+  ) => {
+    const file = options.body.get('file');
+
+    assert.ok(file instanceof Blob);
+    assert.equal(file.type, 'audio/ogg');
+    assert.match(file.name, /\.ogg$/);
+    assert.doesNotMatch(file.name, /\.oga$/);
+
+    return new Response(
+      JSON.stringify({
+        text: 'Prueba de extensión correcta'
+      }),
+      {
+        status: 200,
+        headers: {
+          'content-type': 'application/json'
+        }
+      }
+    );
+  };
+
+  try {
+    const result = await transcribeWithOpenAI(
+      {
+        filePath,
+        mimeType: 'audio/ogg; codecs=opus',
+        language: 'es'
+      },
+      {
+        apiKey: 'test-key'
+      }
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(
+      result.status,
+      'OPENAI_SPEECH_TRANSCRIBED'
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    await fs.unlink(filePath);
+  }
+});
+
 test('OpenAI Speech envía multipart y normaliza respuesta', async () => {
   const originalFetch = globalThis.fetch;
   const filePath = await createAudioFile();

@@ -67,7 +67,17 @@ function safeFileName(filePath, mimeType) {
     '_'
   );
 
+  const normalizedMimeType =
+    normalizeMimeType(mimeType);
+
   if (cleaned && cleaned !== '.') {
+    if (
+      normalizedMimeType === 'audio/ogg' &&
+      cleaned.toLowerCase().endsWith('.oga')
+    ) {
+      return `${cleaned.slice(0, -4)}.ogg`;
+    }
+
     return cleaned;
   }
 
