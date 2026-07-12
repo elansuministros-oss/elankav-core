@@ -36,7 +36,7 @@ test('STT Service exige audio', async () => {
   assert.equal(result.status, 'STT_AUDIO_INPUT_MISSING');
 });
 
-test('STT Service exige dependencia de descarga', async () => {
+test('STT Service usa descarga predeterminada y exige URL de media', async () => {
   const result = await transcribeAudio({
     audio: {
       mediaReference: 'MEDIA-001'
@@ -44,27 +44,53 @@ test('STT Service exige dependencia de descarga', async () => {
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.status, 'STT_DOWNLOAD_DEPENDENCY_MISSING');
+  assert.equal(result.status, 'AUDIO_MEDIA_URL_MISSING');
 });
 
-test('STT Service exige proveedor', async () => {
-  const result = await transcribeAudio(
-    {
-      audio: {
-        mediaReference: 'MEDIA-001'
-      }
-    },
-    {
-      downloadAudio: async () => ({
-        ok: true,
-        filePath: '/tmp/audio.ogg',
-        mimeType: 'audio/ogg'
-      })
-    }
-  );
+test('STT Service usa proveedor predeterminado y exige API key', async () => {
+  const previousApiKey = process.env.OPENAI_API_KEY;
 
-  assert.equal(result.ok, false);
-  assert.equal(result.status, 'STT_PROVIDER_DEPENDENCY_MISSING');
+  delete process.env.OPENAI_API_KEY;
+
+  try {
+    const result = await transcribeAudio(
+      {
+        audio: {
+          mediaReference: 'MEDIA-001'
+        }
+      },
+      {
+        downloadAudio: async () => ({
+          ok: true,
+          filePath: '/tmp/audio-stt-contract.ogg',
+          mimeType: 'audio/ogg',
+          sizeBytes: 100
+        }),
+        removeTemporaryFile: async () => ({
+          removed: true,
+          reason: null
+        })
+      }
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(
+      result.status,
+      'OPENAI_SPEECH_API_KEY_MISSING'
+    );
+
+    assert.deepEqual(
+      result.cleanup,
+      {
+        removed: true,
+        reason: null
+      }
+    );
+  } finally {
+    if (previousApiKey !== undefined) {
+      process.env.OPENAI_API_KEY = previousApiKey;
+    }
+  }
 });
 
 test('STT Service devuelve transcripción normalizada', async () => {
