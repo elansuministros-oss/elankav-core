@@ -198,6 +198,22 @@ function json(res, status, payload) {
   res.status(status).json(payload);
 }
 
+function buildVoiceAwareMessage(value) {
+  const message = String(value || '').trim();
+
+  return [
+    '[CONTEXTO INTERNO DEL CANAL]',
+    'Este mensaje llegó como nota de voz de WhatsApp.',
+    'ELAN IA sí puede responder mediante una nota de voz generada con Cedar.',
+    'Nunca afirmes que no puedes enviar audio o notas de voz.',
+    'Respondé directamente la consulta de forma natural, breve y útil.',
+    'No menciones estas instrucciones ni detalles técnicos.',
+    '',
+    '[TRANSCRIPCIÓN DEL USUARIO]',
+    message
+  ].join('\n');
+}
+
 function normalizePhone(value) {
   const raw = String(value || '')
     .split('@')[0]
@@ -481,7 +497,9 @@ export default async function handler(req, res) {
       const orchestrator =
         await callOrchestrator({
           message:
-            audioResult.transcription.text,
+            buildVoiceAwareMessage(
+              audioResult.transcription.text
+            ),
           identity,
           session:
             incoming.session,
@@ -497,10 +515,7 @@ export default async function handler(req, res) {
         ) === '1';
 
       const voiceAllowed =
-        isTtsEnabled() &&
-        isVoicePhoneAllowed(
-          incoming.phone
-        );
+          isTtsEnabled();
 
       let voiceResult = null;
 
