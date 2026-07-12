@@ -1,7 +1,19 @@
+import { randomUUID } from 'node:crypto';
+
+import {
+  buildIdentityMetadata,
+  normalizeEmail,
+  normalizeKey,
+  normalizePhone,
+  normalizeText,
+  validateClientInput,
+  validateSupplierInput
+} from '../lib/crm-domain.js';
+
 const CRM_TABLES = {
   identities: {
     table: 'crm_identities',
-    select: 'id,canonical_id,display_name,entity_type,created_at'
+    select: 'id,canonical_id,display_name,entity_type,status,metadata,created_at'
   },
   conversations: {
     table: 'crm_conversations',
@@ -14,7 +26,7 @@ const CRM_TABLES = {
 };
 
 function normalize(value) {
-  return String(value || '').trim();
+  return normalizeText(value);
 }
 
 function getBearerToken(req) {
@@ -73,7 +85,8 @@ async function supabaseRequest(
   {
     method = 'GET',
     query = '',
-    body
+    body,
+    prefer
   } = {}
 ) {
   const { url, key } = getSupabaseConfig();
@@ -86,10 +99,7 @@ async function supabaseRequest(
         apikey: key,
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
-        Prefer:
-          method === 'POST'
-            ? 'return=representation'
-            : 'return=representation'
+        Prefer: prefer || 'return=representation'
       },
       body: body === undefined ? undefined : JSON.stringify(body)
     }
@@ -132,7 +142,7 @@ async function loadDashboard() {
   return {
     ok: true,
     status: 'READY',
-    version: 'CRM-040A',
+    version: 'CRM-042B',
     identities,
     conversations,
     messages,
@@ -142,6 +152,13 @@ async function loadDashboard() {
       messages: messages.length
     }
   };
+}
+
+function buildCanonicalId(entityType, displayName, providedCanonicalId = '') {
+  return (
+    normalize(providedCanonicalId) ||
+    `${entityType}:${normalizeKey(displayName) || 'identity'}:${randomUUID()}`
+  );
 }
 
 async function createIdentity(input) {
@@ -177,6 +194,334 @@ async function createIdentity(input) {
   };
 }
 
+async function findIdentitiesByName(name) {
+  const query =
+    'select=' +
+    encodeURIComponent('id,canonical_id,display_name,entity_type,status,metadata') +
+    `&display_name=ilike.${encodeURIComponent(name)}` +
+    '&limit=10';
+
+  const rows = await supabaseRequest('crm_identities', { query });
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function findIdentityCandidates({ name, phone, email, entityType }) {
+  const identities = await findIdentitiesByName(name);
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedEmail = normalizeEmail(email);
+
+  return identities.filter((identity) => {
+    if (identity.entity_type !== entityType) return false;
+
+    const metadataPhone = normalizePhone(identity.metadata?.phone);
+    const metadataEmail = normalizeEmail(identity.metadata?.email);
+    const sameName = normalizeKey(identity.display_name) === normalizeKey(name);
+    const samePhone = Boolean(
+      normalizedPhone && metadataPhone && normalizedPhone === metadataPhone
+    );
+    const sameEmail = Boolean(
+      normalizedEmail && metadataEmail && normalizedEmail === metadataEmail
+    );
+
+    return sameName || samePhone || sameEmail;
+  });
+}
+
+async function insertRole(identityId, role, platform = null) {
+  const rows = await supabaseRequest('crm_roles', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      identity_id: identityId,
+      role,
+      platform
+    }
+  });
+
+  return rows?.[0] || null;
+}
+
+async function createSupplier(input) {
+  const validation = validateSupplierInput(input);
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: validation.error,
+      details: validation.fields || null
+    };
+  }
+
+  const supplier = validation.value;
+  const candidates = await findIdentityCandidates({
+    ...supplier,
+    entityType: 'supplier'
+  });
+
+  if (candidates.length && !supplier.forceCreate) {
+    return {
+      ok: false,
+      statusCode: 409,
+      status: 'DUPLICATE_CANDIDATE',
+      error: 'CRM_SUPPLIER_DUPLICATE_CANDIDATE',
+      candidates
+    };
+  }
+
+  const metadata = buildIdentityMetadata({
+    source: 'crm-owner-mode',
+    phone: supplier.phone,
+    email: supplier.email,
+    country: supplier.country,
+    city: supplier.city,
+    notes: supplier.notes
+  });
+
+  const identityRows = await supabaseRequest('crm_identities', {
+    method: 'POST',
+    body: {
+      canonical_id: buildCanonicalId(
+        'supplier',
+        supplier.name,
+        supplier.canonicalId
+      ),
+      display_name: supplier.name,
+      entity_type: 'supplier',
+      metadata
+    }
+  });
+
+  const identity = identityRows?.[0];
+
+  if (!identity?.id) {
+    throw new Error('CRM_SUPPLIER_IDENTITY_NOT_CREATED');
+  }
+
+  const [profileRows, role] = await Promise.all([
+    supabaseRequest('crm_supplier_profiles', {
+      method: 'POST',
+      body: {
+        identity_id: identity.id,
+        supplier_type: supplier.supplierType,
+        categories: supplier.categories,
+        contact_name: supplier.contactName || null,
+        phone: supplier.phone || null,
+        email: supplier.email || null,
+        country: supplier.country || null,
+        city: supplier.city || null,
+        commercial_terms: supplier.commercialTerms || null,
+        notes: supplier.notes || null,
+        status: 'active'
+      }
+    }),
+    insertRole(identity.id, 'supplier', null)
+  ]);
+
+  await writeAuditEvent({
+    action: 'create_supplier',
+    entityType: 'supplier',
+    entityId: identity.id,
+    platform: null,
+    payload: {
+      supplierType: supplier.supplierType,
+      categories: supplier.categories
+    }
+  });
+
+  return {
+    ok: true,
+    statusCode: 201,
+    status: 'CREATED',
+    supplier: {
+      identity,
+      profile: profileRows?.[0] || null,
+      role
+    }
+  };
+}
+
+async function findIdentityForClient(client) {
+  const candidates = await findIdentityCandidates({
+    ...client,
+    entityType: 'client'
+  });
+
+  return candidates[0] || null;
+}
+
+async function findClientRelationship(identityId, platform) {
+  const query =
+    'select=' +
+    encodeURIComponent(
+      'id,identity_id,platform,responsible_commercial_id,status,created_at'
+    ) +
+    `&identity_id=eq.${encodeURIComponent(identityId)}` +
+    `&platform=eq.${encodeURIComponent(platform)}` +
+    '&limit=1';
+
+  const rows = await supabaseRequest('crm_client_relationships', { query });
+  return rows?.[0] || null;
+}
+
+async function createClient(input) {
+  const validation = validateClientInput(input);
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: validation.error,
+      details: validation.fields || null
+    };
+  }
+
+  const client = validation.value;
+  const responsibleCommercialId =
+    client.responsibleCommercialId ||
+    normalize(process.env.CRM_DEFAULT_ADMIN_IDENTITY_ID);
+
+  if (!responsibleCommercialId) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: 'CRM_CLIENT_RESPONSIBLE_REQUIRED'
+    };
+  }
+
+  let identity = await findIdentityForClient(client);
+  let identityCreated = false;
+
+  if (!identity) {
+    const rows = await supabaseRequest('crm_identities', {
+      method: 'POST',
+      body: {
+        canonical_id: buildCanonicalId(
+          'client',
+          client.name,
+          client.canonicalId
+        ),
+        display_name: client.name,
+        entity_type: 'client',
+        metadata: buildIdentityMetadata({
+          source: 'crm-owner-mode',
+          phone: client.phone,
+          email: client.email,
+          country: client.country,
+          city: client.city,
+          notes: client.notes
+        })
+      }
+    });
+
+    identity = rows?.[0] || null;
+    identityCreated = true;
+  }
+
+  if (!identity?.id) {
+    throw new Error('CRM_CLIENT_IDENTITY_NOT_CREATED');
+  }
+
+  const existingRelationship = await findClientRelationship(
+    identity.id,
+    client.platform
+  );
+
+  if (existingRelationship) {
+    return {
+      ok: false,
+      statusCode: 409,
+      status: 'DUPLICATE_CANDIDATE',
+      error: 'CRM_CLIENT_RELATIONSHIP_EXISTS',
+      client: {
+        identity,
+        relationship: existingRelationship
+      }
+    };
+  }
+
+  const [relationshipRows, role] = await Promise.all([
+    supabaseRequest('crm_client_relationships', {
+      method: 'POST',
+      body: {
+        identity_id: identity.id,
+        platform: client.platform,
+        responsible_commercial_id: responsibleCommercialId,
+        status: 'active',
+        source: 'crm-owner-mode',
+        metadata: {
+          notes: client.notes || null
+        }
+      }
+    }),
+    insertRole(identity.id, 'client', client.platform)
+  ]);
+
+  await writeAuditEvent({
+    action: 'create_client',
+    entityType: 'client',
+    entityId: identity.id,
+    platform: client.platform,
+    payload: {
+      responsibleCommercialId,
+      identityCreated
+    }
+  });
+
+  return {
+    ok: true,
+    statusCode: 201,
+    status: 'CREATED',
+    client: {
+      identity,
+      identityCreated,
+      relationship: relationshipRows?.[0] || null,
+      role
+    }
+  };
+}
+
+async function writeAuditEvent({
+  action,
+  entityType,
+  entityId,
+  platform,
+  payload
+}) {
+  await supabaseRequest('crm_audit_events', {
+    method: 'POST',
+    body: {
+      action,
+      entity_type: entityType,
+      entity_id: entityId,
+      platform,
+      actor_type: 'internal_token',
+      payload: payload || {}
+    }
+  });
+}
+
+function sendResult(res, result) {
+  if (!result.ok) {
+    return res.status(result.statusCode).json({
+      ok: false,
+      status: result.status || 'ERROR',
+      error: result.error,
+      details: result.details || null,
+      candidates: result.candidates || undefined,
+      client: result.client || undefined
+    });
+  }
+
+  return res.status(result.statusCode).json({
+    ok: true,
+    status: result.status,
+    identity: result.identity,
+    supplier: result.supplier,
+    client: result.client
+  });
+}
+
 export default async function handler(req, res) {
   const authorization = requireAdmin(req);
 
@@ -197,28 +542,22 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const action = normalize(req.body?.action);
 
-      if (action !== 'create_identity') {
-        return res.status(400).json({
-          ok: false,
-          status: 'ERROR',
-          error: 'CRM_ACTION_INVALID'
-        });
+      if (action === 'create_identity') {
+        return sendResult(res, await createIdentity(req.body));
       }
 
-      const result = await createIdentity(req.body);
-
-      if (!result.ok) {
-        return res.status(result.statusCode).json({
-          ok: false,
-          status: 'ERROR',
-          error: result.error
-        });
+      if (action === 'create_supplier') {
+        return sendResult(res, await createSupplier(req.body));
       }
 
-      return res.status(result.statusCode).json({
-        ok: true,
-        status: result.status,
-        identity: result.identity
+      if (action === 'create_client') {
+        return sendResult(res, await createClient(req.body));
+      }
+
+      return res.status(400).json({
+        ok: false,
+        status: 'ERROR',
+        error: 'CRM_ACTION_INVALID'
       });
     }
 
