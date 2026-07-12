@@ -1,4 +1,6 @@
 import { resolveWhatsAppIdentity } from '../services/whatsappIdentityService.js';
+import { extractAudioCandidate } from '../adapters/audioIntakeAdapter.js';
+import { validateAudioIntake } from '../services/audioIntakeService.js';
 
 const DEFAULT_ORCHESTRATOR_URL =
   'https://orchestrator.elankav.com/api/messages';
@@ -256,6 +258,21 @@ export default async function handler(req, res) {
         reason: incoming.isGroup
           ? 'GROUP_MESSAGE'
           : 'BROADCAST_MESSAGE'
+      });
+    }
+
+    const audioCandidate = extractAudioCandidate(req.body || {});
+
+    if (audioCandidate.isAudio) {
+      const audioIntake = validateAudioIntake(audioCandidate);
+
+      return json(res, 200, {
+        ok: audioIntake.accepted,
+        processed: false,
+        mediaDetected: true,
+        status: audioIntake.status,
+        reason: audioIntake.reason,
+        audio: audioIntake.audio || null
       });
     }
 
