@@ -33,6 +33,13 @@ function allowedMimeTypes() {
 }
 
 export function validateAudioIntake(candidate = {}) {
+  const normalizedMimeType = String(
+    candidate.mimeType || ''
+  )
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+
   if (!candidate.isAudio) {
     return {
       accepted: false,
@@ -49,7 +56,7 @@ export function validateAudioIntake(candidate = {}) {
     };
   }
 
-  if (!candidate.mimeType) {
+  if (!normalizedMimeType) {
     return {
       accepted: false,
       status: 'AUDIO_METADATA_INCOMPLETE',
@@ -57,7 +64,7 @@ export function validateAudioIntake(candidate = {}) {
     };
   }
 
-  if (!allowedMimeTypes().includes(candidate.mimeType)) {
+  if (!allowedMimeTypes().includes(normalizedMimeType)) {
     return {
       accepted: false,
       status: 'AUDIO_TYPE_NOT_ALLOWED',
@@ -113,7 +120,7 @@ export function validateAudioIntake(candidate = {}) {
       messageId: candidate.messageId,
       chatId: candidate.chatId,
       mediaType: candidate.mediaType,
-      mimeType: candidate.mimeType,
+      mimeType: normalizedMimeType,
       fileName: candidate.fileName,
       durationSeconds: candidate.durationSeconds,
       sizeBytes: candidate.sizeBytes,
