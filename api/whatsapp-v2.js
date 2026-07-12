@@ -1,10 +1,148 @@
 import { resolveWhatsAppIdentity } from '../services/whatsappIdentityService.js';
 import { extractAudioCandidate } from '../adapters/audioIntakeAdapter.js';
 import { validateAudioIntake } from '../services/audioIntakeService.js';
+import { transcribeAudio } from '../services/sttService.js';
 
 const DEFAULT_ORCHESTRATOR_URL =
   'https://orchestrator.elankav.com/api/messages';
 const DEFAULT_WAHA_URL = 'https://waha.elankav.com';
+
+
+function isSttEnabled(
+  value = process.env.STT_ENABLED
+) {
+  return [
+    '1',
+    'true',
+    'yes',
+    'on'
+  ].includes(
+    String(value || '')
+      .trim()
+      .toLowerCase()
+  );
+}
+
+export async function processAudioCandidate(
+  audioCandidate,
+  options = {}
+) {
+  const audioIntake =
+    validateAudioIntake(audioCandidate);
+
+  const baseResult = {
+    ok: audioIntake.accepted,
+    processed: false,
+    mediaDetected: true,
+    status: audioIntake.status,
+    reason: audioIntake.reason,
+    audio: audioIntake.audio || null,
+    transcription: null
+  };
+
+  if (!audioIntake.accepted) {
+    return baseResult;
+  }
+
+  const enabled =
+    options.enabled !== undefined
+      ? Boolean(options.enabled)
+      : isSttEnabled();
+
+  if (!enabled) {
+    return baseResult;
+  }
+
+  const transcribe =
+    options.transcribe ||
+    transcribeAudio;
+
+  try {
+    const sttResult = await transcribe(
+      {
+        audio: {
+          messageId:
+            audioCandidate.messageId,
+          chatId:
+            audioCandidate.chatId,
+          mediaUrl:
+            audioCandidate.mediaUrl,
+          mediaReference:
+            audioCandidate.mediaReference,
+          mimeType:
+            audioCandidate.mimeType,
+          fileName:
+            audioCandidate.fileName,
+          sizeBytes:
+            audioCandidate.sizeBytes,
+          durationSeconds:
+            audioCandidate.durationSeconds,
+          isVoiceNote:
+            audioCandidate.isVoiceNote,
+          source:
+            audioCandidate.source
+        },
+        language:
+          options.language ||
+          process.env.OPENAI_STT_LANGUAGE ||
+          null,
+        prompt:
+          options.prompt ||
+          process.env.OPENAI_STT_PROMPT ||
+          null,
+        downloadOptions:
+          options.downloadOptions || {},
+        providerOptions:
+          options.providerOptions || {}
+      },
+      options.dependencies || {}
+    );
+
+    if (!sttResult?.ok) {
+      return {
+        ...baseResult,
+        ok: false,
+        status:
+          sttResult?.status ||
+          'STT_TRANSCRIPTION_FAILED',
+        reason: 'STT_FAILED',
+        stt: {
+          cleanup:
+            sttResult?.cleanup || null
+        }
+      };
+    }
+
+    return {
+      ...baseResult,
+      ok: true,
+      status:
+        'STT_TRANSCRIPTION_READY',
+      reason: null,
+      transcription:
+        sttResult.transcription || null,
+      stt: {
+        cleanup:
+          sttResult.cleanup || null,
+        download:
+          sttResult.download || null
+      }
+    };
+  } catch (error) {
+    return {
+      ...baseResult,
+      ok: false,
+      status: 'STT_UNEXPECTED_ERROR',
+      reason: 'STT_FAILED',
+      stt: {
+        errorCode:
+          error?.code ||
+          error?.name ||
+          'UNKNOWN_ERROR'
+      }
+    };
+  }
+}
 
 function json(res, status, payload) {
   res.status(status).json(payload);
@@ -264,16 +402,16 @@ export default async function handler(req, res) {
     const audioCandidate = extractAudioCandidate(req.body || {});
 
     if (audioCandidate.isAudio) {
-      const audioIntake = validateAudioIntake(audioCandidate);
+      const audioResult =
+        await processAudioCandidate(
+          audioCandidate
+        );
 
-      return json(res, 200, {
-        ok: audioIntake.accepted,
-        processed: false,
-        mediaDetected: true,
-        status: audioIntake.status,
-        reason: audioIntake.reason,
-        audio: audioIntake.audio || null
-      });
+      return json(
+        res,
+        200,
+        audioResult
+      );
     }
 
     if (!incoming.chatId || !incoming.senderRaw || !incoming.text) {
