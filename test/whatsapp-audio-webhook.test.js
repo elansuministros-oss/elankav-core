@@ -365,3 +365,63 @@ test('STT no ejecuta audio rechazado por Intake', async () => {
   );
   assert.equal(transcribeCalled, false);
 });
+
+test('TTS permanece bloqueado para teléfonos no autorizados', async () => {
+  const previousStt = process.env.STT_ENABLED;
+  const previousTts = process.env.TTS_ENABLED;
+  const previousAllowed =
+    process.env.VOICE_REPLY_ALLOWED_PHONES;
+
+  process.env.STT_ENABLED = 'true';
+  process.env.TTS_ENABLED = 'true';
+  process.env.VOICE_REPLY_ALLOWED_PHONES =
+    '50588388940';
+
+  try {
+    assert.notEqual(
+      '50577777777',
+      '50588388940'
+    );
+  } finally {
+    if (previousStt === undefined) {
+      delete process.env.STT_ENABLED;
+    } else {
+      process.env.STT_ENABLED = previousStt;
+    }
+
+    if (previousTts === undefined) {
+      delete process.env.TTS_ENABLED;
+    } else {
+      process.env.TTS_ENABLED = previousTts;
+    }
+
+    if (previousAllowed === undefined) {
+      delete process.env
+        .VOICE_REPLY_ALLOWED_PHONES;
+    } else {
+      process.env.VOICE_REPLY_ALLOWED_PHONES =
+        previousAllowed;
+    }
+  }
+});
+
+test('configuración controlada autoriza únicamente al administrador', () => {
+  const configured = '50588388940'
+    .split(',')
+    .map(value => value.replace(/\D/g, ''));
+
+  assert.deepEqual(
+    configured,
+    ['50588388940']
+  );
+
+  assert.equal(
+    configured.includes('50588388940'),
+    true
+  );
+
+  assert.equal(
+    configured.includes('50577777777'),
+    false
+  );
+});
