@@ -28,10 +28,14 @@ function getBearerToken(req) {
 }
 
 function requireAdmin(req) {
-  const expectedToken = normalize(process.env.KAVTORE_SESSION_TOKEN);
   const receivedToken = getBearerToken(req);
 
-  if (!expectedToken) {
+  const acceptedTokens = [
+    normalize(process.env.KAVTORE_SESSION_TOKEN),
+    normalize(process.env.CRM_INTERNAL_TOKEN)
+  ].filter(Boolean);
+
+  if (!acceptedTokens.length) {
     return {
       ok: false,
       status: 500,
@@ -39,7 +43,7 @@ function requireAdmin(req) {
     };
   }
 
-  if (!receivedToken || receivedToken !== expectedToken) {
+  if (!receivedToken || !acceptedTokens.includes(receivedToken)) {
     return {
       ok: false,
       status: 401,
