@@ -40,6 +40,14 @@ function allowedVoicePhones() {
 }
 
 function isVoicePhoneAllowed(phone) {
+  const raw = String(
+    process.env.VOICE_REPLY_ALLOWED_PHONES || ''
+  ).trim();
+
+  if (raw === '*') {
+    return true;
+  }
+
   const normalized =
     String(phone || '')
       .replace(/\D/g, '');
