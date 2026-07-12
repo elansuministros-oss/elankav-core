@@ -1,5 +1,24 @@
 -- CRM-042B — Proveedores globales y clientes por plataforma
 
+create table if not exists public.crm_platforms (
+  code text primary key,
+  name text not null,
+  active boolean not null default true,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+insert into public.crm_platforms (code, name)
+values
+  ('elanvisual', 'ELANVISUAL'),
+  ('elanpet', 'ELANPET'),
+  ('elanhome', 'ELANHOME'),
+  ('elancenter', 'ELANCENTER'),
+  ('elantransporte', 'ELANTRANSPORTE'),
+  ('elania', 'ELAN IA')
+on conflict (code) do nothing;
+
 create table if not exists public.crm_supplier_profiles (
   identity_id uuid primary key references public.crm_identities(id) on delete cascade,
   supplier_type text not null check (supplier_type in ('materials','services','mixed')),
@@ -19,7 +38,7 @@ create table if not exists public.crm_supplier_profiles (
 create table if not exists public.crm_client_relationships (
   id uuid primary key default gen_random_uuid(),
   identity_id uuid not null references public.crm_identities(id) on delete cascade,
-  platform text not null,
+  platform text not null references public.crm_platforms(code) on update cascade on delete restrict,
   responsible_commercial_id uuid not null references public.crm_identities(id) on delete restrict,
   status text not null default 'active',
   source text not null default 'manual',
@@ -34,7 +53,7 @@ create table if not exists public.crm_audit_events (
   action text not null,
   entity_type text not null,
   entity_id uuid,
-  platform text,
+  platform text references public.crm_platforms(code) on update cascade on delete restrict,
   actor_type text not null,
   actor_identity_id uuid references public.crm_identities(id) on delete set null,
   payload jsonb not null default '{}'::jsonb,
@@ -59,14 +78,17 @@ create index if not exists idx_crm_client_relationships_responsible
 create index if not exists idx_crm_audit_events_entity
   on public.crm_audit_events(entity_type, entity_id, created_at desc);
 
+alter table public.crm_platforms enable row level security;
 alter table public.crm_supplier_profiles enable row level security;
 alter table public.crm_client_relationships enable row level security;
 alter table public.crm_audit_events enable row level security;
 
+revoke all on table public.crm_platforms from anon, authenticated;
 revoke all on table public.crm_supplier_profiles from anon, authenticated;
 revoke all on table public.crm_client_relationships from anon, authenticated;
 revoke all on table public.crm_audit_events from anon, authenticated;
 
+grant all on table public.crm_platforms to service_role;
 grant all on table public.crm_supplier_profiles to service_role;
 grant all on table public.crm_client_relationships to service_role;
 grant all on table public.crm_audit_events to service_role;
