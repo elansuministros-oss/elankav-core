@@ -61,6 +61,7 @@ test('valida cliente por plataforma', () => {
     action: 'create_client',
     name: 'Comercial San Jose',
     platform: 'ELANVISUAL',
+    whatsapp: '+50588887777',
     responsibleCommercialId: '00000000-0000-0000-0000-000000000001'
   });
 
