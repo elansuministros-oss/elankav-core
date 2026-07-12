@@ -2,11 +2,53 @@ import { resolveWhatsAppIdentity } from '../services/whatsappIdentityService.js'
 import { extractAudioCandidate } from '../adapters/audioIntakeAdapter.js';
 import { validateAudioIntake } from '../services/audioIntakeService.js';
 import { transcribeAudio } from '../services/sttService.js';
+import { deliverVoiceResponse } from '../services/voiceResponseService.js';
 
 const DEFAULT_ORCHESTRATOR_URL =
   'https://orchestrator.elankav.com/api/messages';
 const DEFAULT_WAHA_URL = 'https://waha.elankav.com';
 
+
+function isFeatureEnabled(value) {
+  return [
+    '1',
+    'true',
+    'yes',
+    'on'
+  ].includes(
+    String(value || '')
+      .trim()
+      .toLowerCase()
+  );
+}
+
+function isTtsEnabled(
+  value = process.env.TTS_ENABLED
+) {
+  return isFeatureEnabled(value);
+}
+
+function allowedVoicePhones() {
+  return String(
+    process.env.VOICE_REPLY_ALLOWED_PHONES || ''
+  )
+    .split(',')
+    .map(value =>
+      value.replace(/\D/g, '')
+    )
+    .filter(Boolean);
+}
+
+function isVoicePhoneAllowed(phone) {
+  const normalized =
+    String(phone || '')
+      .replace(/\D/g, '');
+
+  return Boolean(
+    normalized &&
+    allowedVoicePhones().includes(normalized)
+  );
+}
 
 function isSttEnabled(
   value = process.env.STT_ENABLED
@@ -407,11 +449,125 @@ export default async function handler(req, res) {
           audioCandidate
         );
 
-      return json(
-        res,
-        200,
-        audioResult
-      );
+      if (
+        !audioResult?.ok ||
+        audioResult.status !==
+          'STT_TRANSCRIPTION_READY' ||
+        !audioResult.transcription?.text
+      ) {
+        return json(
+          res,
+          200,
+          audioResult
+        );
+      }
+
+      const identity =
+        resolveWhatsAppIdentity({
+          senderRaw:
+            incoming.senderRaw,
+          phone:
+            incoming.phone
+        });
+
+      const orchestrator =
+        await callOrchestrator({
+          message:
+            audioResult.transcription.text,
+          identity,
+          session:
+            incoming.session,
+          event:
+            incoming.event,
+          senderRaw:
+            incoming.senderRaw
+        });
+
+      const dryRun =
+        String(
+          req.query?.dryRun || ''
+        ) === '1';
+
+      const voiceAllowed =
+        isTtsEnabled() &&
+        isVoicePhoneAllowed(
+          incoming.phone
+        );
+
+      let voiceResult = null;
+
+      if (!dryRun) {
+        await sendWahaText({
+          session:
+            incoming.session,
+          chatId:
+            incoming.chatId,
+          text:
+            orchestrator.reply
+        });
+
+        if (voiceAllowed) {
+          voiceResult =
+            await deliverVoiceResponse({
+              text:
+                orchestrator.reply,
+              chatId:
+                incoming.chatId,
+              session:
+                incoming.session
+            });
+        }
+      }
+
+      return json(res, 200, {
+        ok: true,
+        processed: true,
+        dryRun,
+        mediaDetected: true,
+        status:
+          voiceAllowed && !dryRun
+            ? voiceResult?.status ||
+              'VOICE_RESPONSE_FAILED'
+            : 'STT_REPLY_SENT',
+        transcription:
+          audioResult.transcription,
+        replySent:
+          !dryRun,
+        voiceEnabled:
+          voiceAllowed,
+        voiceSent:
+          Boolean(
+            voiceResult?.ok &&
+            voiceResult?.sent
+          ),
+        voice:
+          voiceResult
+            ? {
+                status:
+                  voiceResult.status,
+                profile:
+                  voiceResult.profile ||
+                  null,
+                voice:
+                  voiceResult.voice ||
+                  null,
+                messageIdPresent:
+                  Boolean(
+                    voiceResult.delivery
+                      ?.messageId
+                  )
+              }
+            : null,
+        ownerMode:
+          Boolean(
+            orchestrator.context
+              ?.ownerMode
+          ),
+        platform:
+          orchestrator.context
+            ?.platform ||
+          null
+      });
     }
 
     if (!incoming.chatId || !incoming.senderRaw || !incoming.text) {
