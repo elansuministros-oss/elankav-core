@@ -107,10 +107,15 @@ test('Audio Download Service exige URL de media', async () => {
   assert.equal(result.status, 'AUDIO_MEDIA_URL_MISSING');
 });
 
-test('OpenAI Speech Adapter permanece desactivado', async () => {
-  const result = await transcribeWithOpenAI();
+test('OpenAI Speech Adapter exige archivo', async () => {
+  const result = await transcribeWithOpenAI(
+    {},
+    {
+      apiKey: 'test-key'
+    }
+  );
 
   assert.equal(result.ok, false);
-  assert.equal(result.status, 'OPENAI_SPEECH_NOT_IMPLEMENTED');
+  assert.equal(result.status, 'OPENAI_SPEECH_FILE_MISSING');
   assert.equal(result.provider, 'openai');
 });
