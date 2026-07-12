@@ -154,3 +154,214 @@ test('webhook conserva MESSAGE_INCOMPLETE para texto vacío', async () => {
   assert.equal(res.payload.ignored, true);
   assert.equal(res.payload.reason, 'MESSAGE_INCOMPLETE');
 });
+
+test('STT apagado conserva AUDIO_ACCEPTED', async () => {
+  const { processAudioCandidate } =
+    await import('../api/whatsapp-v2.js');
+
+  let transcribeCalled = false;
+
+  const result = await processAudioCandidate(
+    {
+      isAudio: true,
+      messageId: 'AUDIO-FLAG-OFF',
+      chatId: '50500000000@c.us',
+      mediaType: 'audio',
+      mimeType: 'audio/ogg',
+      mediaUrl:
+        '/api/files/ELANKAV/audio-off.oga',
+      mediaReference: null,
+      fileName: 'audio-off.oga',
+      durationSeconds: 10,
+      sizeBytes: 1000,
+      isVoiceNote: true,
+      source: 'waha',
+      receivedAt:
+        '2026-07-12T00:00:00.000Z'
+    },
+    {
+      enabled: false,
+      transcribe: async () => {
+        transcribeCalled = true;
+      }
+    }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'AUDIO_ACCEPTED');
+  assert.equal(result.transcription, null);
+  assert.equal(transcribeCalled, false);
+});
+
+test('STT encendido devuelve transcripción normalizada', async () => {
+  const { processAudioCandidate } =
+    await import('../api/whatsapp-v2.js');
+
+  const result = await processAudioCandidate(
+    {
+      isAudio: true,
+      messageId: 'AUDIO-STT-READY',
+      chatId: '50500000000@c.us',
+      mediaType: 'audio',
+      mimeType: 'audio/ogg',
+      mediaUrl:
+        '/api/files/ELANKAV/audio-ready.oga',
+      mediaReference: null,
+      fileName: 'audio-ready.oga',
+      durationSeconds: 12,
+      sizeBytes: 2000,
+      isVoiceNote: true,
+      source: 'waha',
+      receivedAt:
+        '2026-07-12T00:00:00.000Z'
+    },
+    {
+      enabled: true,
+      transcribe: async (input) => {
+        assert.equal(
+          input.audio.mediaUrl,
+          '/api/files/ELANKAV/audio-ready.oga'
+        );
+
+        assert.equal(
+          input.audio.mimeType,
+          'audio/ogg'
+        );
+
+        return {
+          ok: true,
+          status: 'STT_TRANSCRIPTION_READY',
+          transcription: {
+            text: 'Hola desde ELAN IA',
+            language: 'es',
+            provider: 'openai',
+            model:
+              'gpt-4o-mini-transcribe'
+          },
+          download: {
+            mimeType: 'audio/ogg',
+            sizeBytes: 2000
+          },
+          cleanup: {
+            removed: true,
+            reason: null
+          }
+        };
+      }
+    }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    result.status,
+    'STT_TRANSCRIPTION_READY'
+  );
+
+  assert.equal(
+    result.transcription.text,
+    'Hola desde ELAN IA'
+  );
+
+  assert.equal(
+    result.transcription.provider,
+    'openai'
+  );
+
+  assert.deepEqual(
+    result.stt.cleanup,
+    {
+      removed: true,
+      reason: null
+    }
+  );
+});
+
+test('STT encendido degrada de forma controlada ante fallo', async () => {
+  const { processAudioCandidate } =
+    await import('../api/whatsapp-v2.js');
+
+  const result = await processAudioCandidate(
+    {
+      isAudio: true,
+      messageId: 'AUDIO-STT-FAIL',
+      chatId: '50500000000@c.us',
+      mediaType: 'audio',
+      mimeType: 'audio/ogg',
+      mediaUrl:
+        '/api/files/ELANKAV/audio-fail.oga',
+      mediaReference: null,
+      durationSeconds: 10,
+      sizeBytes: 1500,
+      isVoiceNote: true,
+      source: 'waha',
+      receivedAt:
+        '2026-07-12T00:00:00.000Z'
+    },
+    {
+      enabled: true,
+      transcribe: async () => ({
+        ok: false,
+        status:
+          'OPENAI_SPEECH_RATE_LIMITED',
+        cleanup: {
+          removed: true,
+          reason: null
+        }
+      })
+    }
+  );
+
+  assert.equal(result.ok, false);
+
+  assert.equal(
+    result.status,
+    'OPENAI_SPEECH_RATE_LIMITED'
+  );
+
+  assert.equal(result.reason, 'STT_FAILED');
+  assert.equal(result.transcription, null);
+
+  assert.deepEqual(
+    result.stt.cleanup,
+    {
+      removed: true,
+      reason: null
+    }
+  );
+});
+
+test('STT no ejecuta audio rechazado por Intake', async () => {
+  const { processAudioCandidate } =
+    await import('../api/whatsapp-v2.js');
+
+  let transcribeCalled = false;
+
+  const result = await processAudioCandidate(
+    {
+      isAudio: true,
+      messageId: 'AUDIO-INVALID',
+      chatId: '50500000000@c.us',
+      mediaType: 'audio',
+      mimeType: 'application/pdf',
+      mediaUrl:
+        '/api/files/ELANKAV/not-audio.pdf',
+      durationSeconds: 10,
+      sizeBytes: 1000,
+      isVoiceNote: false,
+      source: 'waha'
+    },
+    {
+      enabled: true,
+      transcribe: async () => {
+        transcribeCalled = true;
+      }
+    }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.status,
+    'AUDIO_TYPE_NOT_ALLOWED'
+  );
+  assert.equal(transcribeCalled, false);
+});
