@@ -344,3 +344,51 @@ WhatsApp
 - Suite automatizada: OK.
 - Despliegue Vercel: success.
 - Pendiente final: prueba real desde WhatsApp y confirmación visual de una sola salida.
+
+---
+
+## VOICE-HOTFIX-002 — Respuesta exclusiva de WhatsApp
+
+**Estado:** Implementado y desplegado  
+**Fecha de cierre:** 2026-07-13 00:14 UTC  
+**PR:** #14  
+**Commit productivo:** eb5cc729a087e0fe4ab68f14efa7ddc9ca94cc43
+
+### Problema
+
+Cuando ELAN IA recibía una nota de voz, el webhook enviaba dos respuestas para la misma interacción:
+
+1. `POST /api/sendText`
+2. `POST /api/sendVoice`
+
+La correlación fue verificada en los registros de WAHA y Nginx Proxy Manager.
+
+### Causa raíz
+
+`api/whatsapp-v2.js` ejecutaba primero `sendWahaText()` y después `deliverVoiceResponse()` cuando TTS estaba habilitado.
+
+### Solución
+
+El flujo de salida quedó mutuamente exclusivo:
+
+- TTS habilitado y correcto: solo audio.
+- TTS deshabilitado: solo texto.
+- Error de generación o envío de voz: texto como respaldo.
+- Nunca texto y audio para la misma respuesta.
+
+### Ruta productiva verificada
+
+```text
+WhatsApp
+  → WAHA
+  → https://elankav-core.vercel.app/api/whatsapp
+  → rewrite /api/whatsapp-v2
+  → api/whatsapp-v2.js
+```
+
+### Validación
+
+- Sintaxis de Node: OK.
+- Suite automatizada: OK.
+- Despliegue Vercel: success.
+- Pendiente final: prueba real desde WhatsApp y confirmación visual de una sola salida.
