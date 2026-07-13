@@ -27,6 +27,9 @@ function createRequest(body, query = {}) {
 }
 
 test('webhook detecta audio válido sin enviarlo al Orchestrator', async () => {
+  const previousStt = process.env.STT_ENABLED;
+  delete process.env.STT_ENABLED;
+
   const req = createRequest({
     event: 'message',
     session: 'ELANKAV',
@@ -45,7 +48,15 @@ test('webhook detecta audio válido sin enviarlo al Orchestrator', async () => {
 
   const res = createResponse();
 
-  await handler(req, res);
+  try {
+    await handler(req, res);
+  } finally {
+    if (previousStt === undefined) {
+      delete process.env.STT_ENABLED;
+    } else {
+      process.env.STT_ENABLED = previousStt;
+    }
+  }
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.ok, true);

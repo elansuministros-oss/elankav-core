@@ -281,6 +281,7 @@ async function createSupplier(input) {
       metadata: buildIdentityMetadata({
         source: 'crm-owner-mode',
         phone: supplier.phone,
+        whatsapp: supplier.whatsapp,
         email: supplier.email,
         country: supplier.country,
         city: supplier.city,
@@ -415,6 +416,7 @@ async function createClient(input) {
         metadata: buildIdentityMetadata({
           source: 'crm-owner-mode',
           phone: client.phone,
+          whatsapp: client.whatsapp,
           email: client.email,
           country: client.country,
           city: client.city,

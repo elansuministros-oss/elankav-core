@@ -32,6 +32,32 @@ test('valida proveedor de materiales', () => {
   assert.equal(result.value.phone, '50588887777');
 });
 
+test('valida proveedor con whatsapp sin campo phone', () => {
+  const result = validateSupplierInput({
+    action: 'create_supplier',
+    name: 'Proveedor WhatsApp',
+    supplierType: 'services',
+    whatsapp: '+505 8888-7777'
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.whatsapp, '+50588887777');
+  assert.equal(result.value.phone, '50588887777');
+});
+
+test('acepta whatsapp internacional con codigo de pais sin signo mas', () => {
+  const result = validateSupplierInput({
+    action: 'create_supplier',
+    name: 'Proveedor Internacional',
+    supplierType: 'materials',
+    whatsapp: '506 8888 7777'
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.whatsapp, '+50688887777');
+  assert.equal(result.value.phone, '50688887777');
+});
+
 test('rechaza tipo de proveedor desconocido', () => {
   const result = validateSupplierInput({
     action: 'create_supplier',
