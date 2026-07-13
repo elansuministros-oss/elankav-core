@@ -518,17 +518,9 @@ export default async function handler(req, res) {
           isTtsEnabled();
 
       let voiceResult = null;
+      let textSent = false;
 
       if (!dryRun) {
-        await sendWahaText({
-          session:
-            incoming.session,
-          chatId:
-            incoming.chatId,
-          text:
-            orchestrator.reply
-        });
-
         if (voiceAllowed) {
           voiceResult =
             await deliverVoiceResponse({
@@ -539,6 +531,30 @@ export default async function handler(req, res) {
               session:
                 incoming.session
             });
+
+          if (!voiceResult?.ok || !voiceResult?.sent) {
+            await sendWahaText({
+              session:
+                incoming.session,
+              chatId:
+                incoming.chatId,
+              text:
+                orchestrator.reply
+            });
+
+            textSent = true;
+          }
+        } else {
+          await sendWahaText({
+            session:
+              incoming.session,
+            chatId:
+              incoming.chatId,
+            text:
+              orchestrator.reply
+          });
+
+          textSent = true;
         }
       }
 
