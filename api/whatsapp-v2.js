@@ -3,6 +3,7 @@ import { extractAudioCandidate } from '../adapters/audioIntakeAdapter.js';
 import { validateAudioIntake } from '../services/audioIntakeService.js';
 import { transcribeAudio } from '../services/sttService.js';
 import { deliverVoiceResponse } from '../services/voiceResponseService.js';
+import { deliverApprovedDesign } from '../services/designDeliveryService.js';
 import {
   loadConversationMemory,
   recordConversationExchange
@@ -395,7 +396,8 @@ async function callOrchestrator({
 
   return {
     reply,
-    context: data?.result?.context || null
+    context: data?.result?.context || null,
+    design: data?.result?.design || null
   };
 }
 
@@ -546,9 +548,24 @@ export default async function handler(req, res) {
 
       let voiceResult = null;
       let textSent = false;
+      let designDelivery = null;
 
       if (!dryRun) {
-        if (voiceAllowed) {
+        designDelivery =
+          await deliverApprovedDesign({
+            design:
+              orchestrator.design,
+            caption:
+              orchestrator.reply,
+            chatId:
+              incoming.chatId,
+            session:
+              incoming.session
+          });
+
+        if (designDelivery?.sent) {
+          textSent = false;
+        } else if (voiceAllowed) {
           voiceResult =
             await deliverVoiceResponse({
               text:
@@ -607,14 +624,19 @@ export default async function handler(req, res) {
         dryRun,
         mediaDetected: true,
         status:
-          voiceAllowed && !dryRun
+          designDelivery?.sent
+            ? designDelivery.status
+            : voiceAllowed && !dryRun
             ? voiceResult?.status ||
               'VOICE_RESPONSE_FAILED'
             : 'STT_REPLY_SENT',
         transcription:
           audioResult.transcription,
-        replySent:
-          !dryRun,
+        replySent: Boolean(
+          designDelivery?.sent ||
+          voiceResult?.sent ||
+          textSent
+        ),
         voiceEnabled:
           voiceAllowed,
         voiceSent:
@@ -640,6 +662,22 @@ export default async function handler(req, res) {
                   )
               }
             : null,
+        design: designDelivery
+          ? {
+              status:
+                designDelivery.status,
+              sent:
+                designDelivery.sent === true,
+              assetId:
+                designDelivery.assetId ||
+                null,
+              messageIdPresent:
+                Boolean(
+                  designDelivery.delivery
+                    ?.messageId
+                )
+            }
+          : null,
         ownerMode:
           Boolean(
             orchestrator.context
@@ -685,13 +723,31 @@ export default async function handler(req, res) {
     });
 
     let memoryWrite = null;
+    let textSent = false;
+    let designDelivery = null;
 
     if (!dryRun) {
-      await sendWahaText({
-        session: incoming.session,
-        chatId: incoming.chatId,
-        text: orchestrator.reply
-      });
+      designDelivery =
+        await deliverApprovedDesign({
+          design:
+            orchestrator.design,
+          caption:
+            orchestrator.reply,
+          chatId:
+            incoming.chatId,
+          session:
+            incoming.session
+        });
+
+      if (!designDelivery?.sent) {
+        await sendWahaText({
+          session: incoming.session,
+          chatId: incoming.chatId,
+          text: orchestrator.reply
+        });
+
+        textSent = true;
+      }
 
       if (memory.enabled) {
         memoryWrite = await recordConversationExchange({
@@ -723,7 +779,26 @@ export default async function handler(req, res) {
       },
       ownerMode: Boolean(orchestrator.context?.ownerMode),
       platform: orchestrator.context?.platform || null,
-      replySent: !dryRun,
+      replySent: Boolean(
+        designDelivery?.sent ||
+        textSent
+      ),
+      design: designDelivery
+        ? {
+            status:
+              designDelivery.status,
+            sent:
+              designDelivery.sent === true,
+            assetId:
+              designDelivery.assetId ||
+              null,
+            messageIdPresent:
+              Boolean(
+                designDelivery.delivery
+                  ?.messageId
+              )
+          }
+        : null,
       memory: {
         read: memory.status,
         write: memoryWrite?.status || null
