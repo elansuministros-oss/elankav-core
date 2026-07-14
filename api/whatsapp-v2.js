@@ -3,6 +3,10 @@ import { extractAudioCandidate } from '../adapters/audioIntakeAdapter.js';
 import { validateAudioIntake } from '../services/audioIntakeService.js';
 import { transcribeAudio } from '../services/sttService.js';
 import { deliverVoiceResponse } from '../services/voiceResponseService.js';
+import {
+  loadConversationMemory,
+  recordConversationExchange
+} from '../services/conversationMemoryService.js';
 
 const DEFAULT_ORCHESTRATOR_URL =
   'https://orchestrator.elankav.com/api/messages';
@@ -274,6 +278,22 @@ function extractText(payload = {}) {
   ).trim();
 }
 
+function extractMessageId(body = {}, payload = {}) {
+  const value =
+    payload.id?.id ||
+    payload.key?.id ||
+    payload.message?.key?.id ||
+    payload._data?.id?.id ||
+    body.id ||
+    (typeof payload.id === 'string' ? payload.id : '');
+
+  return String(value || '').trim();
+}
+
+function getDefaultPlatform() {
+  return process.env.WAHA_DEFAULT_PLATFORM || 'ELANVISUAL';
+}
+
 function extractIncoming(body = {}) {
   const payload = extractPayload(body);
   const senderRaw = extractSenderRaw(payload);
@@ -298,6 +318,7 @@ function extractIncoming(body = {}) {
 
   return {
     event,
+    messageId: extractMessageId(body, payload),
     session:
       body.session ||
       payload.session ||
@@ -318,7 +339,8 @@ async function callOrchestrator({
   identity,
   session,
   event,
-  senderRaw
+  senderRaw,
+  conversationHistory
 }) {
   const url =
     process.env.ORCHESTRATOR_MESSAGES_URL ||
@@ -331,9 +353,7 @@ async function callOrchestrator({
     },
     body: JSON.stringify({
       message,
-      platform:
-        process.env.WAHA_DEFAULT_PLATFORM ||
-        'ELANVISUAL',
+      platform: getDefaultPlatform(),
       channel: 'whatsapp',
       externalUserId: identity.canonicalId,
       phone: identity.canonicalId,
@@ -342,6 +362,9 @@ async function callOrchestrator({
         source: 'waha',
         event: event || null,
         senderRaw: senderRaw || null,
+        conversationHistory: Array.isArray(conversationHistory)
+          ? conversationHistory
+          : [],
         identity: {
           receivedId: identity.receivedId,
           canonicalId: identity.canonicalId,
@@ -437,6 +460,7 @@ export default async function handler(req, res) {
 
   try {
     const incoming = extractIncoming(req.body || {});
+    const dryRun = String(req.query?.dryRun || '') === '1';
 
     if (incoming.event && incoming.event !== 'message') {
       return json(res, 200, {
@@ -494,6 +518,12 @@ export default async function handler(req, res) {
             incoming.phone
         });
 
+      const memory = await loadConversationMemory({
+        identity,
+        platform: getDefaultPlatform(),
+        readOnly: dryRun
+      });
+
       const orchestrator =
         await callOrchestrator({
           message:
@@ -506,13 +536,10 @@ export default async function handler(req, res) {
           event:
             incoming.event,
           senderRaw:
-            incoming.senderRaw
+            incoming.senderRaw,
+          conversationHistory:
+            memory.history
         });
-
-      const dryRun =
-        String(
-          req.query?.dryRun || ''
-        ) === '1';
 
       const voiceAllowed =
           isTtsEnabled();
@@ -555,6 +582,22 @@ export default async function handler(req, res) {
           });
 
           textSent = true;
+        }
+      }
+
+      let memoryWrite = null;
+
+      if (!dryRun && memory.enabled) {
+        memoryWrite = await recordConversationExchange({
+          memory,
+          incomingMessageId: incoming.messageId,
+          userMessage: audioResult.transcription.text,
+          assistantMessage: orchestrator.reply,
+          messageType: 'audio'
+        });
+
+        if (!memoryWrite.ok) {
+          console.warn('ELANKAV conversation memory write skipped:', memoryWrite.status);
         }
       }
 
@@ -605,7 +648,11 @@ export default async function handler(req, res) {
         platform:
           orchestrator.context
             ?.platform ||
-          null
+          null,
+        memory: {
+          read: memory.status,
+          write: memoryWrite?.status || null
+        }
       });
     }
 
@@ -622,15 +669,22 @@ export default async function handler(req, res) {
       phone: incoming.phone
     });
 
+    const memory = await loadConversationMemory({
+      identity,
+      platform: getDefaultPlatform(),
+      readOnly: dryRun
+    });
+
     const orchestrator = await callOrchestrator({
       message: incoming.text,
       identity,
       session: incoming.session,
       event: incoming.event,
-      senderRaw: incoming.senderRaw
+      senderRaw: incoming.senderRaw,
+      conversationHistory: memory.history
     });
 
-    const dryRun = String(req.query?.dryRun || '') === '1';
+    let memoryWrite = null;
 
     if (!dryRun) {
       await sendWahaText({
@@ -638,6 +692,20 @@ export default async function handler(req, res) {
         chatId: incoming.chatId,
         text: orchestrator.reply
       });
+
+      if (memory.enabled) {
+        memoryWrite = await recordConversationExchange({
+          memory,
+          incomingMessageId: incoming.messageId,
+          userMessage: incoming.text,
+          assistantMessage: orchestrator.reply,
+          messageType: 'text'
+        });
+
+        if (!memoryWrite.ok) {
+          console.warn('ELANKAV conversation memory write skipped:', memoryWrite.status);
+        }
+      }
     }
 
     return json(res, 200, {
@@ -655,7 +723,11 @@ export default async function handler(req, res) {
       },
       ownerMode: Boolean(orchestrator.context?.ownerMode),
       platform: orchestrator.context?.platform || null,
-      replySent: !dryRun
+      replySent: !dryRun,
+      memory: {
+        read: memory.status,
+        write: memoryWrite?.status || null
+      }
     });
   } catch (error) {
     console.error('ELANKAV WhatsApp Identity Bridge error:', error);
