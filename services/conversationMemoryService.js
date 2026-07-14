@@ -277,7 +277,9 @@ async function recordConversationExchange({
   const outboundId = sourceMessageId
     ? `${sourceMessageId}:reply`
     : `waha-out:${randomUUID()}`;
-  const now = new Date().toISOString();
+  const receivedAt = new Date();
+  const inboundCreatedAt = receivedAt.toISOString();
+  const outboundCreatedAt = new Date(receivedAt.getTime() + 1).toISOString();
 
   try {
     const { error } = await resolvedSupabase
@@ -291,7 +293,8 @@ async function recordConversationExchange({
             body: inboundBody,
             message_type: messageType,
             status: 'received',
-            metadata: { source: 'waha' }
+            metadata: { source: 'waha' },
+            created_at: inboundCreatedAt
           },
           {
             conversation_id: conversationId,
@@ -300,7 +303,8 @@ async function recordConversationExchange({
             body: outboundBody,
             message_type: messageType,
             status: 'sent',
-            metadata: { source: 'elankav-orchestrator' }
+            metadata: { source: 'elankav-orchestrator' },
+            created_at: outboundCreatedAt
           }
         ],
         {
@@ -314,8 +318,8 @@ async function recordConversationExchange({
     const { error: updateError } = await resolvedSupabase
       .from('crm_conversations')
       .update({
-        last_message_at: now,
-        updated_at: now
+        last_message_at: outboundCreatedAt,
+        updated_at: outboundCreatedAt
       })
       .eq('id', conversationId);
 
