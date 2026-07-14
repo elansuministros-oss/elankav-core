@@ -110,8 +110,63 @@ function getSalesFlow(productId) {
   throw new Error(`Flujo comercial no registrado: ${productId}`);
 }
 
+function getCommercialOffer({ productId, sizeCm } = {}) {
+  const product = getProduct(productId);
+  const hasRequestedSize = !(
+    sizeCm === undefined ||
+    sizeCm === null ||
+    String(sizeCm).trim() === ''
+  );
+  const requestedSizeCm = hasRequestedSize
+    ? Number(sizeCm)
+    : null;
+
+  if (
+    hasRequestedSize &&
+    (!Number.isFinite(requestedSizeCm) || requestedSizeCm <= 0)
+  ) {
+    throw new TypeError('sizeCm debe ser un número positivo');
+  }
+
+  const effectiveSizeCm = requestedSizeCm ?? product.dimensions.baseCm;
+  const variants = product.variants.map(variant => {
+    const quote = calculatePrice({
+      productId: product.id,
+      variantId: variant.id,
+      sizeCm: effectiveSizeCm
+    });
+
+    return Object.freeze({
+      id: variant.id,
+      name: variant.commercialName,
+      finish: variant.finish,
+      printing: variant.printing,
+      relief: variant.relief,
+      quote
+    });
+  });
+
+  return Object.freeze({
+    status: 'active',
+    source: 'ELANKAV Commercial Library',
+    productId: product.id,
+    productVersion: product.version,
+    productName: product.name,
+    description: product.description,
+    requestedSizeCm,
+    effectiveSizeCm,
+    baseSizeUsed: requestedSizeCm === null,
+    dimensions: product.dimensions,
+    materialRules: product.materialRules,
+    pricingRule: product.pricingRule,
+    commercialRules: product.commercialRules,
+    variants: Object.freeze(variants)
+  });
+}
+
 export {
   calculatePrice,
+  getCommercialOffer,
   getProduct,
   getRenderPrompt,
   getSalesFlow,

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   calculatePrice,
+  getCommercialOffer,
   getProduct,
   getRenderPrompt,
   getSalesFlow
@@ -63,4 +64,48 @@ test('ECL contiene prompt y flujo sin inventar especificaciones', () => {
 
   assert.match(prompt.prompt, /3 mm/);
   assert.equal(flow.productId, 'boton-acrilico');
+});
+
+test('ECL publica oferta comercial oficial del botón', () => {
+  const offer = getCommercialOffer({
+    productId: 'boton-acrilico'
+  });
+
+  assert.equal(offer.source, 'ELANKAV Commercial Library');
+  assert.equal(offer.effectiveSizeCm, 60);
+  assert.equal(offer.baseSizeUsed, true);
+  assert.equal(offer.materialRules.thicknessMm, 3);
+  assert.equal(offer.variants.length, 4);
+  assert.deepEqual(
+    offer.variants.map(item => item.quote.total),
+    [100, 130, 150, 190]
+  );
+  assert.equal(offer.commercialRules.paymentAdvancePercent, 60);
+  assert.equal(offer.commercialRules.paymentBalancePercent, 40);
+});
+
+test('ECL calcula todas las variantes para una medida solicitada', () => {
+  const offer = getCommercialOffer({
+    productId: 'boton-acrilico',
+    sizeCm: 70
+  });
+
+  assert.equal(offer.requestedSizeCm, 70);
+  assert.equal(offer.baseSizeUsed, false);
+  assert.deepEqual(
+    offer.variants.map(item => item.quote.total),
+    [120, 150, 170, 210]
+  );
+});
+
+test('ECL manda medidas intermedias a revisión manual', () => {
+  const offer = getCommercialOffer({
+    productId: 'boton-acrilico',
+    sizeCm: 65
+  });
+
+  assert.equal(
+    offer.variants.every(item => item.quote.status === 'manual-review'),
+    true
+  );
 });
