@@ -1,8 +1,11 @@
 import {
+  createSignedDesignAssetUrl,
+  findDesignRequestByAccess,
   insertDesignRequest,
   listPublishedDesigns,
   uploadDesignAsset
 } from '../adapters/designPortalSupabaseAdapter.js';
+import { createHash, randomBytes } from 'node:crypto';
 
 const REQUEST_TYPES = new Set(['rotulo', 'fachada', 'logo', 'otro']);
 const ENVIRONMENTS = new Set(['interior', 'exterior']);
@@ -27,6 +30,14 @@ function normalizeDimension(value) {
 
 function generateRequestCode(now = Date.now(), uuid = crypto.randomUUID()) {
   return `DESIGN-${now.toString(36).toUpperCase()}-${uuid.slice(0, 4).toUpperCase()}`;
+}
+
+function generateAccessToken() {
+  return randomBytes(32).toString('base64url');
+}
+
+function hashAccessToken(value) {
+  return createHash('sha256').update(String(value || '')).digest('hex');
 }
 
 function validateDesignRequestPayload(payload = {}) {
@@ -96,6 +107,7 @@ function validateDesignRequestPayload(payload = {}) {
 async function createDesignRequest(payload = {}, dependencies = {}) {
   const normalized = validateDesignRequestPayload(payload);
   const requestCode = generateRequestCode();
+  const accessToken = generateAccessToken();
   const upload = dependencies.uploadAsset || uploadDesignAsset;
   const insert = dependencies.insertRequest || insertDesignRequest;
   const uploadedFiles = [];
@@ -124,6 +136,7 @@ async function createDesignRequest(payload = {}, dependencies = {}) {
     needs_logo_design: normalized.needsLogoDesign,
     design_notes: normalized.designNotes,
     files: uploadedFiles,
+    access_token_hash: hashAccessToken(accessToken),
     status: 'ai_pending'
   };
   const stored = await insert(row);
@@ -131,9 +144,51 @@ async function createDesignRequest(payload = {}, dependencies = {}) {
   return Object.freeze({
     id: stored.id,
     requestCode: stored.request_code || requestCode,
+    accessToken,
     status: stored.status || 'ai_pending',
     whatsapp: normalized.whatsapp,
     filesReceived: uploadedFiles.length
+  });
+}
+
+async function getDesignRequestStatus({ requestCode, accessToken } = {}, dependencies = {}) {
+  const normalizedCode = normalizeText(requestCode, 80).toUpperCase();
+  const normalizedToken = normalizeText(accessToken, 200);
+
+  if (!/^DESIGN-[A-Z0-9]+-[A-Z0-9]{4}$/.test(normalizedCode) || !normalizedToken) {
+    const error = new Error('Acceso de solicitud inválido');
+    error.code = 'DESIGN_STATUS_ACCESS_INVALID';
+    throw error;
+  }
+
+  const find = dependencies.findRequest || findDesignRequestByAccess;
+  const sign = dependencies.signAsset || createSignedDesignAssetUrl;
+  const stored = await find({
+    requestCode: normalizedCode,
+    accessTokenHash: hashAccessToken(normalizedToken)
+  });
+
+  if (!stored) {
+    const error = new Error('Solicitud de diseño no encontrada');
+    error.code = 'DESIGN_STATUS_NOT_FOUND';
+    throw error;
+  }
+
+  const resultFiles = Array.isArray(stored.result_files)
+    ? stored.result_files
+    : [];
+  const result = resultFiles[0] || null;
+  const imageUrl = result?.bucket && result?.path
+    ? await sign({ bucket: result.bucket, path: result.path })
+    : null;
+
+  return Object.freeze({
+    requestCode: stored.request_code,
+    status: stored.status,
+    ready: ['review', 'approved', 'quoted', 'closed'].includes(stored.status) && Boolean(imageUrl),
+    imageUrl,
+    completedAt: stored.completed_at || null,
+    retryable: stored.status === 'failed'
   });
 }
 
@@ -154,9 +209,12 @@ async function getPublicDesignGallery(dependencies = {}) {
 
 export {
   createDesignRequest,
+  generateAccessToken,
   generateRequestCode,
+  getDesignRequestStatus,
   getPublicDesignGallery,
   normalizeDimension,
   normalizePhone,
+  hashAccessToken,
   validateDesignRequestPayload
 };
