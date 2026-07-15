@@ -1,4 +1,11 @@
-﻿/* eslint-disable no-console */
+﻿/* global process */
+
+import { crearClienteSupabase } from "../lib/memoria-operativa.js";
+import {
+  guardarMemoriaConversacion,
+  obtenerMemoriaConversacion,
+  normalizarWhatsApp,
+} from "../lib/memoria-conversacion.js";
 
 import {
   createDesignRequest,
@@ -16,6 +23,8 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:5173",
   "http://localhost:3000",
 ]);
+
+const supabase = crearClienteSupabase();
 
 function cors(req, res) {
   const origin = req.headers.origin || "";
@@ -41,6 +50,15 @@ async function handleChat(payload = {}) {
   }
 
   const mensaje = String(payload.mensaje || payload.message || payload.prompt || "").trim();
+  const whatsapp = normalizarWhatsApp(
+    payload.whatsapp ||
+      payload.WhatsApp ||
+      payload.telefono ||
+      payload.phone ||
+      payload.from ||
+      payload.waId ||
+      ""
+  );
 
   if (!mensaje) {
     return {
@@ -48,6 +66,24 @@ async function handleChat(payload = {}) {
       error: "Mensaje vacío.",
     };
   }
+
+  const memoria = await obtenerMemoriaConversacion({
+    supabase,
+    whatsapp,
+  });
+
+  const input = [
+    {
+      role: "system",
+      content:
+        "Eres ELAN AI, asistente operativo de ELANKAV CORE. Responde de forma clara, comercial y útil. No reveles lógica interna de costos ni fórmulas privadas.",
+    },
+    ...memoria.contexto,
+    {
+      role: "user",
+      content: mensaje,
+    },
+  ];
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -57,17 +93,7 @@ async function handleChat(payload = {}) {
     },
     body: JSON.stringify({
       model: process.env.ELAN_AI_MODEL || "gpt-4.1-mini",
-      input: [
-        {
-          role: "system",
-          content:
-            "Eres ELAN AI, asistente operativo de ELANKAV CORE. Responde de forma clara, comercial y útil. No reveles lógica interna de costos ni fórmulas privadas.",
-        },
-        {
-          role: "user",
-          content: mensaje,
-        },
-      ],
+      input,
     }),
   });
 
@@ -81,10 +107,25 @@ async function handleChat(payload = {}) {
     };
   }
 
+  const respuesta = data.output_text || "";
+  const guardadoMemoria = await guardarMemoriaConversacion({
+    supabase,
+    whatsapp,
+    contextoPrevio: memoria.contexto,
+    mensajeUsuario: mensaje,
+    respuestaAsistente: respuesta,
+  });
+
   return {
     ok: true,
     tipo: "elan-ai-chat",
-    respuesta: data.output_text || "",
+    respuesta,
+    memoria: {
+      conversation_id: memoria.conversationId || guardadoMemoria.conversationId || "",
+      lectura: memoria.estado,
+      escritura: guardadoMemoria.estado,
+      persistente: Boolean(memoria.habilitada && guardadoMemoria.ok),
+    },
   };
 }
 
