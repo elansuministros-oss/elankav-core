@@ -130,6 +130,198 @@ async function insertDesignRequest(row, { fetchImpl = globalThis.fetch } = {}) {
   return data[0];
 }
 
+async function findDesignRequestByAccess({
+  requestCode,
+  accessTokenHash,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const { url, key } = resolveDesignSupabaseConfig();
+  const query = new URLSearchParams({
+    select: 'id,request_code,whatsapp,status,result_files,completed_at,last_error_code,delivery_status,delivery_attempts,delivery_started_at,delivered_at',
+    request_code: `eq.${requestCode}`,
+    access_token_hash: `eq.${accessTokenHash}`,
+    limit: '1'
+  });
+  const response = await fetchImpl(
+    `${url}/rest/v1/${DESIGN_REQUESTS_TABLE}?${query}`,
+    { headers: createDesignHeaders(key) }
+  );
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || !Array.isArray(data)) {
+    const error = new Error('No fue posible consultar la solicitud de diseño');
+    error.code = 'DESIGN_REQUEST_READ_FAILED';
+    throw error;
+  }
+
+  return data[0] || null;
+}
+
+async function downloadDesignAsset({
+  bucket,
+  path,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const { url, key } = resolveDesignSupabaseConfig();
+  const encodedPath = String(path || '')
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+  const response = await fetchImpl(
+    `${url}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`,
+    { headers: createDesignHeaders(key) }
+  );
+
+  if (!response.ok) {
+    const error = new Error('No fue posible leer el resultado de diseño');
+    error.code = 'DESIGN_RESULT_DOWNLOAD_FAILED';
+    throw error;
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+
+  if (!bytes.length || bytes.length > MAX_FILE_BYTES) {
+    const error = new Error('El resultado de diseño no es válido');
+    error.code = 'DESIGN_RESULT_FILE_INVALID';
+    throw error;
+  }
+
+  return Object.freeze({
+    bytes,
+    mimeType: String(response.headers.get('content-type') || 'image/png')
+      .split(';')[0]
+      .trim()
+      .toLowerCase()
+  });
+}
+
+async function patchDesignDelivery({
+  id,
+  filters = {},
+  values,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const { url, key } = resolveDesignSupabaseConfig();
+  const query = new URLSearchParams({ id: `eq.${id}`, ...filters });
+  const response = await fetchImpl(
+    `${url}/rest/v1/${DESIGN_REQUESTS_TABLE}?${query}`,
+    {
+      method: 'PATCH',
+      headers: createDesignHeaders(key, {
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      }),
+      body: JSON.stringify(values)
+    }
+  );
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || !Array.isArray(data)) {
+    const error = new Error('No fue posible actualizar la entrega del diseño');
+    error.code = 'DESIGN_DELIVERY_UPDATE_FAILED';
+    throw error;
+  }
+
+  return data[0] || null;
+}
+
+async function claimDesignDelivery({
+  id,
+  attempts = 0,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  return patchDesignDelivery({
+    id,
+    filters: { delivery_status: 'in.(pending,failed)' },
+    values: {
+      delivery_status: 'sending',
+      delivery_attempts: Number(attempts || 0) + 1,
+      delivery_started_at: new Date().toISOString(),
+      delivery_error_code: null
+    },
+    fetchImpl
+  });
+}
+
+async function recoverStaleDesignDelivery({
+  id,
+  startedAt,
+  now = Date.now(),
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const started = Date.parse(String(startedAt || ''));
+
+  if (!Number.isFinite(started) || now - started < 120_000) return null;
+
+  return patchDesignDelivery({
+    id,
+    filters: { delivery_status: 'eq.sending' },
+    values: {
+      delivery_status: 'failed',
+      delivery_error_code: 'DESIGN_DELIVERY_INTERRUPTED'
+    },
+    fetchImpl
+  });
+}
+
+async function markDesignDelivery({
+  id,
+  delivered,
+  errorCode = null,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  return patchDesignDelivery({
+    id,
+    filters: { delivery_status: 'eq.sending' },
+    values: delivered
+      ? {
+          delivery_status: 'delivered',
+          delivery_error_code: null,
+          delivered_at: new Date().toISOString()
+        }
+      : {
+          delivery_status: 'failed',
+          delivery_error_code: String(errorCode || 'DESIGN_DELIVERY_FAILED').slice(0, 120)
+        },
+    fetchImpl
+  });
+}
+
+async function createSignedDesignAssetUrl({
+  bucket,
+  path,
+  expiresIn = 3600,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const { url, key } = resolveDesignSupabaseConfig();
+  const encodedPath = String(path || '')
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+  const response = await fetchImpl(
+    `${url}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${encodedPath}`,
+    {
+      method: 'POST',
+      headers: createDesignHeaders(key, {
+        'Content-Type': 'application/json'
+      }),
+      body: JSON.stringify({ expiresIn })
+    }
+  );
+  const data = await response.json().catch(() => null);
+  const signedPath = data?.signedURL || data?.signedUrl || data?.signed_url;
+
+  if (!response.ok || !signedPath) {
+    const error = new Error('No fue posible preparar el resultado de diseño');
+    error.code = 'DESIGN_RESULT_SIGN_FAILED';
+    throw error;
+  }
+
+  return String(signedPath).startsWith('http')
+    ? String(signedPath)
+    : `${url}/storage/v1${signedPath}`;
+}
+
 async function listPublishedDesigns({ fetchImpl = globalThis.fetch } = {}) {
   const { url, key } = resolveDesignSupabaseConfig();
   const query = new URLSearchParams({
@@ -159,9 +351,15 @@ export {
   DESIGN_REQUESTS_TABLE,
   MAX_FILE_BYTES,
   createDesignHeaders,
+  claimDesignDelivery,
   decodeDataUrl,
+  createSignedDesignAssetUrl,
+  downloadDesignAsset,
+  findDesignRequestByAccess,
   insertDesignRequest,
   listPublishedDesigns,
+  markDesignDelivery,
+  recoverStaleDesignDelivery,
   resolveDesignSupabaseConfig,
   sanitizeFileName,
   uploadDesignAsset
