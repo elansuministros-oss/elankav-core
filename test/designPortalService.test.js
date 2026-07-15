@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   createDesignRequest,
+  getDesignRequestStatus,
+  hashAccessToken,
   getPublicDesignGallery,
   normalizePhone,
   validateDesignRequestPayload
@@ -97,9 +99,42 @@ test('DESIGN-PORTAL-01 guarda archivos y solicitud antes de responder', async ()
 
   assert.equal(uploads.length, 1);
   assert.equal(inserted.status, 'ai_pending');
+  assert.match(inserted.access_token_hash, /^[a-f0-9]{64}$/);
+  assert.equal(typeof result.accessToken, 'string');
   assert.equal(inserted.files.length, 1);
   assert.match(result.requestCode, /^DESIGN-/);
   assert.equal(result.filesReceived, 1);
+});
+
+test('DESIGN-PIPELINE-02 consulta el resultado únicamente con token correcto', async () => {
+  const accessToken = 'token-seguro-de-prueba';
+  let receivedHash;
+  const result = await getDesignRequestStatus({
+    requestCode: 'DESIGN-TEST-ABCD',
+    accessToken
+  }, {
+    async findRequest(input) {
+      receivedHash = input.accessTokenHash;
+      return {
+        request_code: input.requestCode,
+        status: 'review',
+        completed_at: '2026-07-15T00:00:00.000Z',
+        result_files: [{
+          bucket: 'design-request-assets',
+          path: 'DESIGN-TEST-ABCD/result.png'
+        }]
+      };
+    },
+    async signAsset(input) {
+      assert.equal(input.path, 'DESIGN-TEST-ABCD/result.png');
+      return 'https://storage.test/signed-result.png';
+    }
+  });
+
+  assert.equal(receivedHash, hashAccessToken(accessToken));
+  assert.equal(result.ready, true);
+  assert.equal(result.status, 'review');
+  assert.equal(result.imageUrl, 'https://storage.test/signed-result.png');
 });
 
 test('DESIGN-PORTAL-01 publica únicamente el contrato seguro de galería', async () => {
