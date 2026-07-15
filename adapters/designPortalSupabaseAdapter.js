@@ -130,6 +130,68 @@ async function insertDesignRequest(row, { fetchImpl = globalThis.fetch } = {}) {
   return data[0];
 }
 
+async function findDesignRequestByAccess({
+  requestCode,
+  accessTokenHash,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const { url, key } = resolveDesignSupabaseConfig();
+  const query = new URLSearchParams({
+    select: 'id,request_code,status,result_files,completed_at,last_error_code',
+    request_code: `eq.${requestCode}`,
+    access_token_hash: `eq.${accessTokenHash}`,
+    limit: '1'
+  });
+  const response = await fetchImpl(
+    `${url}/rest/v1/${DESIGN_REQUESTS_TABLE}?${query}`,
+    { headers: createDesignHeaders(key) }
+  );
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || !Array.isArray(data)) {
+    const error = new Error('No fue posible consultar la solicitud de diseño');
+    error.code = 'DESIGN_REQUEST_READ_FAILED';
+    throw error;
+  }
+
+  return data[0] || null;
+}
+
+async function createSignedDesignAssetUrl({
+  bucket,
+  path,
+  expiresIn = 3600,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const { url, key } = resolveDesignSupabaseConfig();
+  const encodedPath = String(path || '')
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+  const response = await fetchImpl(
+    `${url}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${encodedPath}`,
+    {
+      method: 'POST',
+      headers: createDesignHeaders(key, {
+        'Content-Type': 'application/json'
+      }),
+      body: JSON.stringify({ expiresIn })
+    }
+  );
+  const data = await response.json().catch(() => null);
+  const signedPath = data?.signedURL || data?.signedUrl || data?.signed_url;
+
+  if (!response.ok || !signedPath) {
+    const error = new Error('No fue posible preparar el resultado de diseño');
+    error.code = 'DESIGN_RESULT_SIGN_FAILED';
+    throw error;
+  }
+
+  return String(signedPath).startsWith('http')
+    ? String(signedPath)
+    : `${url}/storage/v1${signedPath}`;
+}
+
 async function listPublishedDesigns({ fetchImpl = globalThis.fetch } = {}) {
   const { url, key } = resolveDesignSupabaseConfig();
   const query = new URLSearchParams({
@@ -160,6 +222,8 @@ export {
   MAX_FILE_BYTES,
   createDesignHeaders,
   decodeDataUrl,
+  createSignedDesignAssetUrl,
+  findDesignRequestByAccess,
   insertDesignRequest,
   listPublishedDesigns,
   resolveDesignSupabaseConfig,
