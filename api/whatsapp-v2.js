@@ -3,6 +3,8 @@ import { extractAudioCandidate } from '../adapters/audioIntakeAdapter.js';
 import { validateAudioIntake } from '../services/audioIntakeService.js';
 import { transcribeAudio } from '../services/sttService.js';
 import { deliverVoiceResponse } from '../services/voiceResponseService.js';
+import { extractImageCandidate } from '../adapters/imageIntakeAdapter.js';
+import { createSignedImageReference } from '../services/mediaReferenceService.js';
 import {
   loadConversationMemory,
   recordConversationExchange
@@ -340,7 +342,8 @@ async function callOrchestrator({
   session,
   event,
   senderRaw,
-  conversationHistory
+  conversationHistory,
+  references = []
 }) {
   const url =
     process.env.ORCHESTRATOR_MESSAGES_URL ||
@@ -364,6 +367,9 @@ async function callOrchestrator({
         senderRaw: senderRaw || null,
         conversationHistory: Array.isArray(conversationHistory)
           ? conversationHistory
+          : [],
+        references: Array.isArray(references)
+          ? references
           : [],
         identity: {
           receivedId: identity.receivedId,
@@ -538,7 +544,8 @@ export default async function handler(req, res) {
           senderRaw:
             incoming.senderRaw,
           conversationHistory:
-            memory.history
+            memory.history,
+          references: []
         });
 
       const voiceAllowed =
@@ -656,7 +663,29 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!incoming.chatId || !incoming.senderRaw || !incoming.text) {
+    const imageCandidate = extractImageCandidate(req.body || {});
+    let imageReference = null;
+
+    if (imageCandidate.isImage) {
+      const signedReference = createSignedImageReference(imageCandidate);
+
+      if (!signedReference.ok) {
+        return json(res, 200, {
+          ok: false,
+          processed: false,
+          mediaDetected: true,
+          status: signedReference.status
+        });
+      }
+
+      imageReference = signedReference.reference;
+    }
+
+    if (
+      !incoming.chatId ||
+      !incoming.senderRaw ||
+      (!incoming.text && !imageReference)
+    ) {
       return json(res, 200, {
         ok: true,
         ignored: true,
@@ -675,13 +704,17 @@ export default async function handler(req, res) {
       readOnly: dryRun
     });
 
+    const resolvedMessage = incoming.text ||
+      'Quiero una propuesta visual basada en la imagen de referencia adjunta.';
+
     const orchestrator = await callOrchestrator({
-      message: incoming.text,
+      message: resolvedMessage,
       identity,
       session: incoming.session,
       event: incoming.event,
       senderRaw: incoming.senderRaw,
-      conversationHistory: memory.history
+      conversationHistory: memory.history,
+      references: imageReference ? [imageReference] : []
     });
 
     let memoryWrite = null;
@@ -697,9 +730,9 @@ export default async function handler(req, res) {
         memoryWrite = await recordConversationExchange({
           memory,
           incomingMessageId: incoming.messageId,
-          userMessage: incoming.text,
+          userMessage: resolvedMessage,
           assistantMessage: orchestrator.reply,
-          messageType: 'text'
+          messageType: imageReference ? 'image' : 'text'
         });
 
         if (!memoryWrite.ok) {
@@ -724,6 +757,8 @@ export default async function handler(req, res) {
       ownerMode: Boolean(orchestrator.context?.ownerMode),
       platform: orchestrator.context?.platform || null,
       replySent: !dryRun,
+      mediaDetected: Boolean(imageReference),
+      mediaStatus: imageReference ? 'IMAGE_REFERENCE_READY' : null,
       memory: {
         read: memory.status,
         write: memoryWrite?.status || null
