@@ -5,6 +5,7 @@ import { transcribeAudio } from '../services/sttService.js';
 import { deliverVoiceResponse } from '../services/voiceResponseService.js';
 import { extractImageCandidate } from '../adapters/imageIntakeAdapter.js';
 import { createSignedImageReference } from '../services/mediaReferenceService.js';
+import handleWhatsAppMediaProxy from '../services/whatsappMediaProxyService.js';
 import {
   loadConversationMemory,
   recordConversationExchange
@@ -448,6 +449,13 @@ async function sendWahaText({ session, chatId, text }) {
 }
 
 export default async function handler(req, res) {
+  if (
+    req.method === 'GET' &&
+    String(req.query?.mediaProxy || '') === '1'
+  ) {
+    return handleWhatsAppMediaProxy(req, res);
+  }
+
   if (req.method === 'GET') {
     return json(res, 200, {
       ok: true,
