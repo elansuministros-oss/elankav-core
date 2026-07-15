@@ -27,7 +27,7 @@ Cada producto declara explícitamente qué plataformas pueden consumirlo.
 | Inventario | No | No | No conectado |
 | Producción | No | No | No conectado |
 | Pagos | No | No | No conectado |
-| Supabase | No | No | Pendiente de fase posterior |
+| Supabase | Sí, servidor | No desde clientes | Fuente oficial de productos y precios |
 | OpenAI | No | No | No conectado |
 | WAHA | No | No | No conectado |
 
@@ -39,10 +39,16 @@ Cada producto declara explícitamente qué plataformas pueden consumirlo.
 4. Las cuentas bancarias y enlaces de pago nunca se guardan dentro de prompts.
 5. Los accesos a CRM, inventario, producción y pagos se habilitan por adapters y servicios separados.
 6. Las nuevas plataformas consumen el mismo contrato; no se duplican catálogos por interfaz.
-7. La fuente oficial futura será Supabase; la configuración en código es bootstrap controlado.
+7. La fuente oficial es `public.commercial_products` en Supabase; el navegador no tiene acceso directo.
 
 ## Estado ECL-001
 
-Producto piloto activo: `boton-acrilico`.
+Productos activos:
 
-La integración con Sales Engine, OpenAI y WhatsApp permanece deshabilitada hasta completar validación funcional.
+- `boton-acrilico`;
+- `rotulo-jala-vista`;
+- `rotulo-cajuela`;
+- `fascia-pvc-3d`;
+- `fachada-acm-luz`.
+
+La consulta de solo lectura se expone por `/api/commercial-library`. OpenAI y WhatsApp la consumen únicamente mediante el Orchestrator; no reciben credenciales de Supabase.
