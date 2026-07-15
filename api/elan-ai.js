@@ -1,6 +1,7 @@
 ﻿/* eslint-disable no-console */
 
 import {
+  continueDesignRequest,
   createDesignRequest,
   getDesignRequestStatus,
   getPublicDesignGallery
@@ -126,6 +127,37 @@ export default async function handler(req, res) {
     const payload = req.body || {};
     const tipo = String(payload.tipo || payload.type || "chat").trim();
 
+    if (tipo === 'design-request-action') {
+      try {
+        const result = await continueDesignRequest(payload);
+        return send(res, 202, {
+          ok: true,
+          result,
+          message: result.action === 'render'
+            ? 'Estamos preparando el render hiperrealista.'
+            : 'Estamos preparando una nueva versión con los cambios.'
+        });
+      } catch (error) {
+        const invalid = [
+          'DESIGN_STATUS_ACCESS_INVALID',
+          'DESIGN_STATUS_NOT_FOUND',
+          'DESIGN_FOLLOWUP_ACTION_INVALID',
+          'DESIGN_FOLLOWUP_INSTRUCTIONS_REQUIRED',
+          'DESIGN_FOLLOWUP_RENDER_TYPE_REQUIRED',
+          'DESIGN_FOLLOWUP_ENVIRONMENT_REQUIRED',
+          'DESIGN_FOLLOWUP_NOT_READY',
+          'DESIGN_FOLLOWUP_RESULT_REQUIRED',
+          'DESIGN_FOLLOWUP_CONFLICT'
+        ].includes(error?.code);
+        return send(res, invalid ? 400 : 503, {
+          ok: false,
+          error: invalid
+            ? error.message
+            : 'No fue posible continuar la solicitud.'
+        });
+      }
+    }
+
     if (tipo === 'design-request-status') {
       try {
         const result = await getDesignRequestStatus({
@@ -181,7 +213,7 @@ export default async function handler(req, res) {
       ok: false,
       error: "Tipo no soportado por /api/elan-ai.",
       tipo,
-      tipos_soportados: ["chat", "elan-ai", "mensaje", "design-request", "design-request-status"],
+      tipos_soportados: ["chat", "elan-ai", "mensaje", "design-request", "design-request-status", "design-request-action"],
       nota: "EMC ya no se procesa aquí. Usar /api/emc-import.",
     });
   } catch (error) {

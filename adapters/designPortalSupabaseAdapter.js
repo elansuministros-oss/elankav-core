@@ -137,7 +137,7 @@ async function findDesignRequestByAccess({
 } = {}) {
   const { url, key } = resolveDesignSupabaseConfig();
   const query = new URLSearchParams({
-    select: 'id,request_code,whatsapp,status,result_files,completed_at,last_error_code,delivery_status,delivery_attempts,delivery_started_at,delivered_at',
+    select: 'id,request_code,whatsapp,status,request_type,installation_environment,width_cm,height_cm,has_logo,needs_logo_design,design_notes,files,result_files,design_result,completed_at,last_error_code,delivery_status,delivery_attempts,delivery_started_at,delivered_at,workflow_stage,revision_number,version_history',
     request_code: `eq.${requestCode}`,
     access_token_hash: `eq.${accessTokenHash}`,
     limit: '1'
@@ -151,6 +151,40 @@ async function findDesignRequestByAccess({
   if (!response.ok || !Array.isArray(data)) {
     const error = new Error('No fue posible consultar la solicitud de diseño');
     error.code = 'DESIGN_REQUEST_READ_FAILED';
+    throw error;
+  }
+
+  return data[0] || null;
+}
+
+async function updateDesignRequestByAccess({
+  requestCode,
+  accessTokenHash,
+  values,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const { url, key } = resolveDesignSupabaseConfig();
+  const query = new URLSearchParams({
+    request_code: `eq.${requestCode}`,
+    access_token_hash: `eq.${accessTokenHash}`,
+    status: 'in.(review,approved,quoted,closed,failed)'
+  });
+  const response = await fetchImpl(
+    `${url}/rest/v1/${DESIGN_REQUESTS_TABLE}?${query}`,
+    {
+      method: 'PATCH',
+      headers: createDesignHeaders(key, {
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      }),
+      body: JSON.stringify(values)
+    }
+  );
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || !Array.isArray(data)) {
+    const error = new Error('No fue posible actualizar la solicitud de diseño');
+    error.code = 'DESIGN_FOLLOWUP_UPDATE_FAILED';
     throw error;
   }
 
@@ -362,5 +396,6 @@ export {
   recoverStaleDesignDelivery,
   resolveDesignSupabaseConfig,
   sanitizeFileName,
+  updateDesignRequestByAccess,
   uploadDesignAsset
 };

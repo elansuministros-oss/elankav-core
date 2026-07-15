@@ -7,6 +7,7 @@ import {
   listPublishedDesigns,
   markDesignDelivery,
   recoverStaleDesignDelivery,
+  updateDesignRequestByAccess,
   uploadDesignAsset
 } from '../adapters/designPortalSupabaseAdapter.js';
 import { createHash, randomBytes } from 'node:crypto';
@@ -156,6 +157,179 @@ async function createDesignRequest(payload = {}, dependencies = {}) {
   });
 }
 
+function validateDesignFollowupPayload(payload = {}) {
+  const action = normalizeText(payload.action, 30).toLowerCase();
+  const instructions = normalizeText(payload.instructions, 4000);
+  const project = payload.project || {};
+  const requestType = normalizeText(project.requestType, 30).toLowerCase();
+  const environment = normalizeText(project.installationEnvironment, 30).toLowerCase();
+  const files = Array.isArray(payload.files)
+    ? payload.files.slice(0, 2).filter(file =>
+        ['place', 'reference'].includes(String(file?.kind || '').toLowerCase()) &&
+        file?.dataUrl
+      )
+    : [];
+
+  if (!['revision', 'render'].includes(action)) {
+    const error = new Error('Acción de seguimiento inválida');
+    error.code = 'DESIGN_FOLLOWUP_ACTION_INVALID';
+    throw error;
+  }
+
+  if (!instructions) {
+    const error = new Error(
+      action === 'revision'
+        ? 'Describí los cambios que necesitás'
+        : 'Indicá cómo querés presentar el render'
+    );
+    error.code = 'DESIGN_FOLLOWUP_INSTRUCTIONS_REQUIRED';
+    throw error;
+  }
+
+  if (action === 'render' && !['rotulo', 'fachada'].includes(requestType)) {
+    const error = new Error('Elegí si el render será de rótulo o fachada');
+    error.code = 'DESIGN_FOLLOWUP_RENDER_TYPE_REQUIRED';
+    throw error;
+  }
+
+  if (action === 'render' && !ENVIRONMENTS.has(environment)) {
+    const error = new Error('Elegí si el render será para interior o exterior');
+    error.code = 'DESIGN_FOLLOWUP_ENVIRONMENT_REQUIRED';
+    throw error;
+  }
+
+  return Object.freeze({
+    action,
+    instructions,
+    requestType: action === 'render' ? requestType : null,
+    environment: action === 'render' ? environment : null,
+    widthCm: action === 'render' ? normalizeDimension(project.widthCm) : null,
+    heightCm: action === 'render' ? normalizeDimension(project.heightCm) : null,
+    files
+  });
+}
+
+async function continueDesignRequest(payload = {}, dependencies = {}) {
+  const requestCode = normalizeText(payload.requestCode, 80).toUpperCase();
+  const accessToken = normalizeText(payload.accessToken, 200);
+
+  if (!/^DESIGN-[A-Z0-9]+-[A-Z0-9]{4}$/.test(requestCode) || !accessToken) {
+    const error = new Error('Acceso de solicitud inválido');
+    error.code = 'DESIGN_STATUS_ACCESS_INVALID';
+    throw error;
+  }
+
+  const followup = validateDesignFollowupPayload(payload);
+  const accessTokenHash = hashAccessToken(accessToken);
+  const find = dependencies.findRequest || findDesignRequestByAccess;
+  const updateRequest = dependencies.updateRequest || updateDesignRequestByAccess;
+  const upload = dependencies.uploadAsset || uploadDesignAsset;
+  const stored = await find({ requestCode, accessTokenHash });
+
+  if (!stored) {
+    const error = new Error('Solicitud de diseño no encontrada');
+    error.code = 'DESIGN_STATUS_NOT_FOUND';
+    throw error;
+  }
+
+  if (!['review', 'approved', 'quoted', 'closed', 'failed'].includes(stored.status)) {
+    const error = new Error('La solicitud todavía está en proceso');
+    error.code = 'DESIGN_FOLLOWUP_NOT_READY';
+    throw error;
+  }
+
+  const currentResults = Array.isArray(stored.result_files)
+    ? stored.result_files
+    : [];
+  const primaryResult = currentResults[0];
+
+  if (!primaryResult?.bucket || !primaryResult?.path) {
+    const error = new Error('La solicitud no tiene un diseño para continuar');
+    error.code = 'DESIGN_FOLLOWUP_RESULT_REQUIRED';
+    throw error;
+  }
+
+  const uploadedFiles = [];
+  for (const file of followup.files) {
+    uploadedFiles.push(await upload({
+      requestCode,
+      kind: String(file.kind).toLowerCase(),
+      file
+    }));
+  }
+
+  const previousAsInput = {
+    ...primaryResult,
+    kind: followup.action === 'render' ? 'logo' : 'reference',
+    name: followup.action === 'render'
+      ? 'logo-aprobado.png'
+      : 'propuesta-anterior.png'
+  };
+  const revisionNumber = Number(stored.revision_number || 1) + 1;
+  const history = [
+    ...(Array.isArray(stored.version_history) ? stored.version_history : []),
+    {
+      revisionNumber: Number(stored.revision_number || 1),
+      workflowStage: stored.workflow_stage || 'concept',
+      requestType: stored.request_type,
+      completedAt: stored.completed_at || null,
+      resultFiles: currentResults
+    }
+  ].slice(-20);
+  const isRender = followup.action === 'render';
+  const designNotes = isRender
+    ? [
+        'Crear un render comercial hiperrealista.',
+        'Mantener exactamente la identidad, composición y colores del logotipo aprobado.',
+        `Indicaciones del cliente: ${followup.instructions}`
+      ].join(' ')
+    : `Modificar la propuesta existente. Cambios solicitados por el cliente: ${followup.instructions}`;
+  const values = {
+    status: 'ai_pending',
+    workflow_stage: isRender ? 'render' : 'revision',
+    revision_number: revisionNumber,
+    version_history: history,
+    request_type: isRender ? followup.requestType : stored.request_type,
+    installation_environment: isRender ? followup.environment : stored.installation_environment,
+    width_cm: isRender ? followup.widthCm : stored.width_cm,
+    height_cm: isRender ? followup.heightCm : stored.height_cm,
+    has_logo: isRender ? true : stored.has_logo,
+    needs_logo_design: isRender ? false : stored.request_type === 'logo',
+    design_notes: designNotes,
+    files: [previousAsInput, ...uploadedFiles],
+    processing_attempts: 0,
+    processing_started_at: null,
+    completed_at: null,
+    last_error_code: null,
+    delivery_status: 'pending',
+    delivery_attempts: 0,
+    delivery_started_at: null,
+    delivery_error_code: null,
+    delivered_at: null,
+    updated_at: new Date().toISOString()
+  };
+  const updated = await updateRequest({
+    requestCode,
+    accessTokenHash,
+    values
+  });
+
+  if (!updated) {
+    const error = new Error('La solicitud cambió antes de poder actualizarla');
+    error.code = 'DESIGN_FOLLOWUP_CONFLICT';
+    throw error;
+  }
+
+  return Object.freeze({
+    requestCode,
+    status: updated.status || 'ai_pending',
+    action: followup.action,
+    workflowStage: values.workflow_stage,
+    revisionNumber,
+    whatsapp: stored.whatsapp
+  });
+}
+
 async function getDesignRequestStatus({ requestCode, accessToken } = {}, dependencies = {}) {
   const normalizedCode = normalizeText(requestCode, 80).toUpperCase();
   const normalizedToken = normalizeText(accessToken, 200);
@@ -262,7 +436,11 @@ async function getDesignRequestStatus({ requestCode, accessToken } = {}, depende
     deliveredToWhatsApp: deliveryStatus === 'delivered',
     deliveryPending:
       ready && deliveryStatus !== 'delivered' && deliveryAttempts < 3,
-    deliveredAt
+    deliveredAt,
+    workflowStage: stored.workflow_stage || 'concept',
+    revisionNumber: Number(stored.revision_number || 1),
+    requestType: stored.request_type,
+    canFollowUp: ready
   });
 }
 
@@ -283,6 +461,7 @@ async function getPublicDesignGallery(dependencies = {}) {
 
 export {
   createDesignRequest,
+  continueDesignRequest,
   generateAccessToken,
   generateRequestCode,
   getDesignRequestStatus,
@@ -290,5 +469,6 @@ export {
   normalizeDimension,
   normalizePhone,
   hashAccessToken,
+  validateDesignFollowupPayload,
   validateDesignRequestPayload
 };
