@@ -4,6 +4,10 @@
     {
       "source": "/api/whatsapp",
       "destination": "/api/whatsapp-v2"
+    },
+    {
+      "source": "/api/whatsapp-media",
+      "destination": "/api/whatsapp-v2?mediaProxy=1"
     }
   ]
 }
