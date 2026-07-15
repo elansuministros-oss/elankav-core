@@ -13,6 +13,7 @@ import {
   decodeDataUrl,
   sanitizeFileName
 } from '../adapters/designPortalSupabaseAdapter.js';
+import { sendDesignImageToWhatsApp } from '../services/wahaImageDeliveryService.js';
 
 const validPayload = () => ({
   tipo: 'design-request',
@@ -116,8 +117,11 @@ test('DESIGN-PIPELINE-02 consulta el resultado únicamente con token correcto', 
     async findRequest(input) {
       receivedHash = input.accessTokenHash;
       return {
+        id: 'request-uuid',
         request_code: input.requestCode,
         status: 'review',
+        delivery_status: 'delivered',
+        delivered_at: '2026-07-15T00:01:00.000Z',
         completed_at: '2026-07-15T00:00:00.000Z',
         result_files: [{
           bucket: 'design-request-assets',
@@ -135,6 +139,102 @@ test('DESIGN-PIPELINE-02 consulta el resultado únicamente con token correcto', 
   assert.equal(result.ready, true);
   assert.equal(result.status, 'review');
   assert.equal(result.imageUrl, 'https://storage.test/signed-result.png');
+  assert.equal(result.deliveredToWhatsApp, true);
+});
+
+test('DESIGN-PIPELINE-02 entrega una sola vez la propuesta terminada por WhatsApp', async () => {
+  const calls = [];
+  const result = await getDesignRequestStatus({
+    requestCode: 'DESIGN-TEST-ABCD',
+    accessToken: 'token-seguro-de-prueba'
+  }, {
+    async findRequest() {
+      return {
+        id: 'request-uuid',
+        request_code: 'DESIGN-TEST-ABCD',
+        whatsapp: '50588415436',
+        status: 'review',
+        delivery_status: 'pending',
+        delivery_attempts: 0,
+        result_files: [{
+          bucket: 'design-request-assets',
+          path: 'DESIGN-TEST-ABCD/result.png'
+        }]
+      };
+    },
+    async signAsset() {
+      return 'https://storage.test/signed-result.png';
+    },
+    async claimDelivery(input) {
+      calls.push(['claim', input.id]);
+      return { delivery_status: 'sending', delivery_attempts: 1 };
+    },
+    async downloadAsset(input) {
+      calls.push(['download', input.path]);
+      return { bytes: Buffer.from('png'), mimeType: 'image/png' };
+    },
+    async sendImage(input) {
+      calls.push(['send', input.whatsapp, input.requestCode]);
+      return { delivered: true };
+    },
+    async markDelivery(input) {
+      calls.push(['mark', input.delivered]);
+      return {
+        delivery_status: 'delivered',
+        delivered_at: '2026-07-15T00:02:00.000Z'
+      };
+    }
+  });
+
+  assert.deepEqual(calls, [
+    ['claim', 'request-uuid'],
+    ['download', 'DESIGN-TEST-ABCD/result.png'],
+    ['send', '50588415436', 'DESIGN-TEST-ABCD'],
+    ['mark', true]
+  ]);
+  assert.equal(result.deliveredToWhatsApp, true);
+  assert.equal(result.deliveredAt, '2026-07-15T00:02:00.000Z');
+});
+
+test('DESIGN-PIPELINE-02 usa el contrato sendImage de WAHA sin URL pública', async () => {
+  const previous = {
+    apiKey: process.env.WAHA_API_KEY,
+    baseUrl: process.env.WAHA_BASE_URL,
+    session: process.env.WAHA_SESSION
+  };
+  process.env.WAHA_API_KEY = 'waha-test-key';
+  process.env.WAHA_BASE_URL = 'https://waha.test';
+  process.env.WAHA_SESSION = 'ELANKAV';
+
+  try {
+    let request;
+    await sendDesignImageToWhatsApp({
+      whatsapp: '+505 8841 5436',
+      requestCode: 'DESIGN-TEST-ABCD',
+      bytes: Buffer.from('imagen'),
+      mimeType: 'image/png',
+      async fetchImpl(url, options) {
+        request = { url, options, body: JSON.parse(options.body) };
+        return { ok: true };
+      }
+    });
+
+    assert.equal(request.url, 'https://waha.test/api/sendImage');
+    assert.equal(request.options.headers['X-Api-Key'], 'waha-test-key');
+    assert.equal(request.body.chatId, '50588415436@c.us');
+    assert.equal(request.body.file.mimetype, 'image/png');
+    assert.equal(request.body.file.data, Buffer.from('imagen').toString('base64'));
+    assert.equal('url' in request.body.file, false);
+  } finally {
+    for (const [name, value] of Object.entries({
+      WAHA_API_KEY: previous.apiKey,
+      WAHA_BASE_URL: previous.baseUrl,
+      WAHA_SESSION: previous.session
+    })) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 });
 
 test('DESIGN-PORTAL-01 publica únicamente el contrato seguro de galería', async () => {
