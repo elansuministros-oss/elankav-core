@@ -1,5 +1,10 @@
 ﻿/* eslint-disable no-console */
 
+import {
+  createDesignRequest,
+  getPublicDesignGallery
+} from '../services/designPortalService.js';
+
 export const config = {
   api: { bodyParser: { sizeLimit: "25mb" } },
 };
@@ -88,6 +93,18 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(204).end();
 
   if (req.method === "GET") {
+    if (String(req.query?.resource || '') === 'design-gallery') {
+      try {
+        const items = await getPublicDesignGallery();
+        return send(res, 200, { ok: true, items });
+      } catch {
+        return send(res, 503, {
+          ok: false,
+          error: 'La galería de diseños no está disponible temporalmente.'
+        });
+      }
+    }
+
     return send(res, 200, {
       ok: true,
       endpoint: "/api/elan-ai",
@@ -108,6 +125,31 @@ export default async function handler(req, res) {
     const payload = req.body || {};
     const tipo = String(payload.tipo || payload.type || "chat").trim();
 
+    if (tipo === 'design-request') {
+      try {
+        const result = await createDesignRequest(payload);
+        return send(res, 201, {
+          ok: true,
+          result,
+          message: 'Solicitud recibida. La propuesta continuará por WhatsApp.'
+        });
+      } catch (error) {
+        const invalid = String(error?.code || '').startsWith('DESIGN_') &&
+          ![
+            'DESIGN_SUPABASE_NOT_CONFIGURED',
+            'DESIGN_FILE_UPLOAD_FAILED',
+            'DESIGN_REQUEST_INSERT_FAILED'
+          ].includes(error.code);
+
+        return send(res, invalid ? 400 : 503, {
+          ok: false,
+          error: invalid
+            ? error.message
+            : 'No fue posible registrar la solicitud. Intentá nuevamente.'
+        });
+      }
+    }
+
     if (tipo === "chat" || tipo === "elan-ai" || tipo === "mensaje") {
       const result = await handleChat(payload);
       return send(res, result.ok ? 200 : 400, result);
@@ -117,7 +159,7 @@ export default async function handler(req, res) {
       ok: false,
       error: "Tipo no soportado por /api/elan-ai.",
       tipo,
-      tipos_soportados: ["chat", "elan-ai", "mensaje"],
+      tipos_soportados: ["chat", "elan-ai", "mensaje", "design-request"],
       nota: "EMC ya no se procesa aquí. Usar /api/emc-import.",
     });
   } catch (error) {
