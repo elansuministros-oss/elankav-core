@@ -30,6 +30,29 @@ function mapCommercialProduct(row) {
   });
 }
 
+function commercialAliasScore(normalizedMessage, alias) {
+  const normalizedAlias = normalizeCommercialText(alias);
+  if (!normalizedAlias) return 0;
+  if (normalizedMessage.includes(normalizedAlias)) {
+    return 1000 + normalizedAlias.length;
+  }
+
+  const tokens = normalizedAlias.split(' ').filter(Boolean);
+  if (tokens.length < 2) return 0;
+  const messageTokens = new Set(normalizedMessage.split(' ').filter(Boolean));
+  return tokens.every(token => messageTokens.has(token))
+    ? 100 + (tokens.length * 10) + normalizedAlias.length
+    : 0;
+}
+
+function commercialProductScore(row, normalizedMessage) {
+  const aliases = Array.isArray(row.aliases) ? row.aliases : [];
+  return Math.max(
+    commercialAliasScore(normalizedMessage, row.name),
+    ...aliases.map(alias => commercialAliasScore(normalizedMessage, alias))
+  );
+}
+
 async function loadCommercialOffer(
   { productId, message } = {},
   { listProducts = listCommercialProducts } = {}
@@ -39,16 +62,20 @@ async function loadCommercialOffer(
   const normalizedMessage = normalizeCommercialText(message);
   const row = normalizedProductId
     ? rows.find(item => item.product_id === normalizedProductId)
-    : rows.find(item =>
-        (Array.isArray(item.aliases) ? item.aliases : []).some(alias =>
-          normalizedMessage.includes(normalizeCommercialText(alias))
-        )
-      );
+    : rows
+        .map(item => ({
+          item,
+          score: commercialProductScore(item, normalizedMessage)
+        }))
+        .filter(candidate => candidate.score > 0)
+        .sort((left, right) => right.score - left.score)[0]?.item;
 
   return row ? mapCommercialProduct(row) : null;
 }
 
 export {
+  commercialAliasScore,
+  commercialProductScore,
   loadCommercialOffer,
   mapCommercialProduct,
   normalizeCommercialText

@@ -14,6 +14,26 @@ import {
 
 const ROWS = [
   {
+    product_id: 'boton-acrilico',
+    platform_id: 'elanvisual',
+    version: 'ECL-001A',
+    status: 'active',
+    name: 'Rótulo estilo botón en acrílico',
+    description: 'Rótulo en acrílico transparente de 3 mm',
+    aliases: [
+      'rótulo estilo botón',
+      'rótulo botón',
+      'botón acrílico'
+    ],
+    specifications: { baseCm: 60, primaryMaterial: 'acrílico transparente' },
+    price_offers: [
+      { label: 'Botón Transparente 60 cm', amount: 100, currency: 'USD', mode: 'reference' },
+      { label: 'Botón con Impresión 60 cm', amount: 130, currency: 'USD', mode: 'reference' }
+    ],
+    sales_guidance: { qualificationQuestion: '¿Lo querés transparente o con impresión?' },
+    commercial_rules: { maxQuestionsPerReply: 1 }
+  },
+  {
     product_id: 'rotulo-jala-vista',
     platform_id: 'elanvisual',
     version: 'SALES-01A',
@@ -83,9 +103,10 @@ function createResponse() {
   };
 }
 
-test('SALES-01 reconoce los cuatro productos desde Supabase', async () => {
+test('SALES-01 reconoce los cinco productos desde Supabase', async () => {
   const listProducts = async () => ROWS;
   const cases = [
+    ['Quiero cotizar un rótulo en acrílico estilo botón', 'boton-acrilico'],
     ['Quiero un jala vista doble cara', 'rotulo-jala-vista'],
     ['Cuánto vale el rótulo de cajuela exterior', 'rotulo-cajuela'],
     ['Necesito una fascia con letras PVC', 'fascia-pvc-3d'],
@@ -99,6 +120,16 @@ test('SALES-01 reconoce los cuatro productos desde Supabase', async () => {
     );
     assert.equal(result.productId, expected);
   }
+});
+
+test('SALES-UX-01 reconoce palabras separadas dentro del nombre comercial', async () => {
+  const result = await loadCommercialOffer(
+    { message: 'Hola, quiero cotizar un rótulo en acrílico estilo botón para mi negocio' },
+    { listProducts: async () => ROWS }
+  );
+
+  assert.equal(result.productId, 'boton-acrilico');
+  assert.deepEqual(result.priceOffers.map(item => item.amount), [100, 130]);
 });
 
 test('SALES-01 conserva precios y modalidad exactos', async () => {
