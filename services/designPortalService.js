@@ -1,11 +1,16 @@
 import {
+  claimDesignDelivery,
   createSignedDesignAssetUrl,
+  downloadDesignAsset,
   findDesignRequestByAccess,
   insertDesignRequest,
   listPublishedDesigns,
+  markDesignDelivery,
+  recoverStaleDesignDelivery,
   uploadDesignAsset
 } from '../adapters/designPortalSupabaseAdapter.js';
 import { createHash, randomBytes } from 'node:crypto';
+import { sendDesignImageToWhatsApp } from './wahaImageDeliveryService.js';
 
 const REQUEST_TYPES = new Set(['rotulo', 'fachada', 'logo', 'otro']);
 const ENVIRONMENTS = new Set(['interior', 'exterior']);
@@ -181,14 +186,83 @@ async function getDesignRequestStatus({ requestCode, accessToken } = {}, depende
   const imageUrl = result?.bucket && result?.path
     ? await sign({ bucket: result.bucket, path: result.path })
     : null;
+  const ready = ['review', 'approved', 'quoted', 'closed'].includes(stored.status) && Boolean(imageUrl);
+  let deliveryStatus = stored.delivery_status || 'pending';
+  let deliveredAt = stored.delivered_at || null;
+  let deliveryAttempts = Number(stored.delivery_attempts || 0);
+
+  if (ready && result?.bucket && result?.path && deliveryStatus !== 'delivered') {
+    const recover = dependencies.recoverDelivery || recoverStaleDesignDelivery;
+    const claim = dependencies.claimDelivery || claimDesignDelivery;
+    const download = dependencies.downloadAsset || downloadDesignAsset;
+    const sendImage = dependencies.sendImage || sendDesignImageToWhatsApp;
+    const mark = dependencies.markDelivery || markDesignDelivery;
+    let deliveryRow = stored;
+
+    if (deliveryStatus === 'sending') {
+      const recovered = await recover({
+        id: stored.id,
+        startedAt: stored.delivery_started_at
+      });
+
+      if (recovered) {
+        deliveryRow = recovered;
+        deliveryStatus = recovered.delivery_status;
+        deliveryAttempts = Number(recovered.delivery_attempts || deliveryAttempts);
+      }
+    }
+
+    if (
+      ['pending', 'failed'].includes(deliveryStatus) &&
+      Number(deliveryRow.delivery_attempts || 0) < 3
+    ) {
+      const claimed = await claim({
+        id: stored.id,
+        attempts: deliveryRow.delivery_attempts
+      });
+
+      if (claimed) {
+        deliveryStatus = 'sending';
+        deliveryAttempts = Number(claimed.delivery_attempts || deliveryAttempts + 1);
+
+        try {
+          const asset = await download({
+            bucket: result.bucket,
+            path: result.path
+          });
+          await sendImage({
+            whatsapp: stored.whatsapp,
+            requestCode: stored.request_code,
+            bytes: asset.bytes,
+            mimeType: asset.mimeType
+          });
+          const delivered = await mark({ id: stored.id, delivered: true });
+          deliveryStatus = delivered?.delivery_status || 'delivered';
+          deliveredAt = delivered?.delivered_at || new Date().toISOString();
+        } catch (error) {
+          await mark({
+            id: stored.id,
+            delivered: false,
+            errorCode: error?.code || 'DESIGN_DELIVERY_FAILED'
+          });
+          deliveryStatus = 'failed';
+        }
+      }
+    }
+  }
 
   return Object.freeze({
     requestCode: stored.request_code,
     status: stored.status,
-    ready: ['review', 'approved', 'quoted', 'closed'].includes(stored.status) && Boolean(imageUrl),
+    ready,
     imageUrl,
     completedAt: stored.completed_at || null,
-    retryable: stored.status === 'failed'
+    retryable: stored.status === 'failed',
+    deliveryStatus,
+    deliveredToWhatsApp: deliveryStatus === 'delivered',
+    deliveryPending:
+      ready && deliveryStatus !== 'delivered' && deliveryAttempts < 3,
+    deliveredAt
   });
 }
 
