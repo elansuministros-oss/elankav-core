@@ -22,7 +22,7 @@ function normalizeMimeType(value) {
   return String(value || '').split(';')[0].trim().toLowerCase();
 }
 
-export default async function handler(req, res) {
+export default async function handleWhatsAppMediaProxy(req, res) {
   if (req.method !== 'GET') {
     return sendJson(res, 405, { ok: false, error: 'METHOD_NOT_ALLOWED' });
   }

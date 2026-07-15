@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import handler from '../api/whatsapp-media.js';
+import handler from '../services/whatsappMediaProxyService.js';
 import { createSignedImageReference } from '../services/mediaReferenceService.js';
 
 const SECRET = 'media01-test-secret-with-at-least-32-characters';
