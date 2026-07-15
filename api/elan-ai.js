@@ -2,6 +2,7 @@
 
 import {
   createDesignRequest,
+  getDesignRequestStatus,
   getPublicDesignGallery
 } from '../services/designPortalService.js';
 
@@ -125,6 +126,27 @@ export default async function handler(req, res) {
     const payload = req.body || {};
     const tipo = String(payload.tipo || payload.type || "chat").trim();
 
+    if (tipo === 'design-request-status') {
+      try {
+        const result = await getDesignRequestStatus({
+          requestCode: payload.requestCode,
+          accessToken: payload.accessToken
+        });
+        return send(res, 200, { ok: true, result });
+      } catch (error) {
+        const notFound = [
+          'DESIGN_STATUS_ACCESS_INVALID',
+          'DESIGN_STATUS_NOT_FOUND'
+        ].includes(error?.code);
+        return send(res, notFound ? 404 : 503, {
+          ok: false,
+          error: notFound
+            ? 'Solicitud no encontrada.'
+            : 'No fue posible consultar la propuesta.'
+        });
+      }
+    }
+
     if (tipo === 'design-request') {
       try {
         const result = await createDesignRequest(payload);
@@ -159,7 +181,7 @@ export default async function handler(req, res) {
       ok: false,
       error: "Tipo no soportado por /api/elan-ai.",
       tipo,
-      tipos_soportados: ["chat", "elan-ai", "mensaje", "design-request"],
+      tipos_soportados: ["chat", "elan-ai", "mensaje", "design-request", "design-request-status"],
       nota: "EMC ya no se procesa aquí. Usar /api/emc-import.",
     });
   } catch (error) {
