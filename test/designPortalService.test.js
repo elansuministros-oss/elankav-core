@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  continueDesignRequest,
   createDesignRequest,
   getDesignRequestStatus,
   hashAccessToken,
@@ -235,6 +236,98 @@ test('DESIGN-PIPELINE-02 usa el contrato sendImage de WAHA sin URL pública', as
       else process.env[name] = value;
     }
   }
+});
+
+test('DESIGN-FOLLOWUP-01 crea una nueva versión usando el resultado anterior', async () => {
+  let values;
+  const result = await continueDesignRequest({
+    requestCode: 'DESIGN-TEST-ABCD',
+    accessToken: 'token-seguro-de-prueba',
+    action: 'revision',
+    instructions: 'Cambiar el fondo rosado por azul oscuro.'
+  }, {
+    async findRequest() {
+      return {
+        id: 'request-uuid',
+        request_code: 'DESIGN-TEST-ABCD',
+        whatsapp: '50588415436',
+        status: 'review',
+        request_type: 'logo',
+        installation_environment: null,
+        has_logo: false,
+        needs_logo_design: true,
+        revision_number: 1,
+        workflow_stage: 'concept',
+        result_files: [{
+          kind: 'generated-logo',
+          bucket: 'design-request-assets',
+          path: 'DESIGN-TEST-ABCD/logo.png',
+          mimeType: 'image/png'
+        }],
+        version_history: []
+      };
+    },
+    async updateRequest(input) {
+      values = input.values;
+      return { status: 'ai_pending' };
+    }
+  });
+
+  assert.equal(values.status, 'ai_pending');
+  assert.equal(values.workflow_stage, 'revision');
+  assert.equal(values.revision_number, 2);
+  assert.equal(values.files[0].kind, 'reference');
+  assert.equal(values.needs_logo_design, true);
+  assert.equal(values.version_history.length, 1);
+  assert.equal(result.action, 'revision');
+});
+
+test('DESIGN-FOLLOWUP-01 convierte el logo aprobado en render hiperrealista', async () => {
+  let values;
+  const result = await continueDesignRequest({
+    requestCode: 'DESIGN-TEST-ABCD',
+    accessToken: 'token-seguro-de-prueba',
+    action: 'render',
+    instructions: 'Instalado sobre una pared blanca con iluminación nocturna.',
+    project: {
+      requestType: 'rotulo',
+      installationEnvironment: 'exterior',
+      widthCm: 100,
+      heightCm: 100
+    }
+  }, {
+    async findRequest() {
+      return {
+        id: 'request-uuid',
+        request_code: 'DESIGN-TEST-ABCD',
+        whatsapp: '50588415436',
+        status: 'review',
+        request_type: 'logo',
+        revision_number: 1,
+        workflow_stage: 'concept',
+        result_files: [{
+          kind: 'generated-logo',
+          bucket: 'design-request-assets',
+          path: 'DESIGN-TEST-ABCD/logo.png',
+          mimeType: 'image/png'
+        }]
+      };
+    },
+    async updateRequest(input) {
+      values = input.values;
+      return { status: 'ai_pending' };
+    }
+  });
+
+  assert.equal(values.workflow_stage, 'render');
+  assert.equal(values.request_type, 'rotulo');
+  assert.equal(values.installation_environment, 'exterior');
+  assert.equal(values.width_cm, 100);
+  assert.equal(values.height_cm, 100);
+  assert.equal(values.files[0].kind, 'logo');
+  assert.equal(values.needs_logo_design, false);
+  assert.match(values.design_notes, /hiperrealista/i);
+  assert.equal(result.action, 'render');
 });
 
 test('DESIGN-PORTAL-01 publica únicamente el contrato seguro de galería', async () => {
