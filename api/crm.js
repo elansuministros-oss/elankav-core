@@ -68,16 +68,21 @@ async function supabaseRequest(
   { method = 'GET', query = '', body, prefer } = {}
 ) {
   const { url, key } = getSupabaseConfig();
+  const headers = {
+    apikey: key,
+    'Content-Type': 'application/json',
+    Prefer: prefer || 'return=representation'
+  };
+
+  if (!key.startsWith('sb_secret_')) {
+    headers.Authorization = `Bearer ${key}`;
+  }
+
   const response = await fetch(
     `${url}/rest/v1/${table}${query ? `?${query}` : ''}`,
     {
       method,
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        Prefer: prefer || 'return=representation'
-      },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body)
     }
   );
