@@ -18,9 +18,24 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
 ]);
 
+function isAllowedOrigin(origin = "") {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:" &&
+      url.hostname.startsWith("elanvisual-platform-") &&
+      url.hostname.endsWith("-elanpetvercelapp.vercel.app");
+  } catch {
+    return false;
+  }
+}
+
 function cors(req, res) {
   const origin = req.headers.origin || "";
-  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGINS.has(origin) ? origin : "https://visual.elankav.com");
+  if (isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
