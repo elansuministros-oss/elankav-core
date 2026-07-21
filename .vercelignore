@@ -1,0 +1,3 @@
+# CRM-100 temporary frontend-only Preview
+# Prevent Vercel Hobby from packaging the repository's serverless API routes.
+api/**
