@@ -4,10 +4,6 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/auth",
-      "destination": "https://elankav-core.vercel.app/api/auth"
-    },
-    {
       "source": "/api/crm",
       "destination": "https://elankav-core.vercel.app/api/crm"
     },
