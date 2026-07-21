@@ -1,14 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/whatsapp",
-      "destination": "/api/whatsapp-v2"
+      "source": "/api/crm",
+      "destination": "https://elankav-core.vercel.app/api/crm"
     },
     {
-      "source": "/api/whatsapp-media",
-      "destination": "/api/whatsapp-v2?mediaProxy=1"
+      "source": "/:path*",
+      "destination": "/index.html"
     }
   ]
 }
