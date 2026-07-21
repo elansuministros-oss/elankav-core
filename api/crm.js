@@ -13,15 +13,34 @@ import {
 const CRM_TABLES = {
   identities: {
     table: 'crm_identities',
-    select: 'id,canonical_id,display_name,entity_type,status,metadata,created_at'
+    select: 'id,canonical_id,display_name,entity_type,status,metadata,created_at',
+    order: 'created_at.desc',
+    limit: 25
   },
   conversations: {
     table: 'crm_conversations',
-    select: 'id,identity_id,channel,platform,stage,status,created_at'
+    select: 'id,identity_id,channel,platform,stage,status,created_at',
+    order: 'created_at.desc',
+    limit: 25
   },
   messages: {
     table: 'crm_messages',
-    select: 'id,conversation_id,direction,body,status,created_at'
+    select: 'id,conversation_id,direction,body,status,created_at',
+    order: 'created_at.desc',
+    limit: 25
+  },
+  roles: {
+    table: 'crm_roles',
+    select: 'id,identity_id,role,platform',
+    order: '',
+    limit: 100
+  },
+  relationships: {
+    table: 'crm_client_relationships',
+    select:
+      'id,identity_id,platform,responsible_commercial_id,status,created_at',
+    order: 'created_at.desc',
+    limit: 100
   }
 };
 
@@ -101,33 +120,45 @@ async function supabaseRequest(
   return data;
 }
 
-async function listRecent({ table, select }) {
-  const query =
-    `select=${encodeURIComponent(select)}` +
-    '&order=created_at.desc' +
-    '&limit=25';
+async function listRows({ table, select, order = '', limit = 25 }) {
+  let query = `select=${encodeURIComponent(select)}`;
+
+  if (order) {
+    query += `&order=${encodeURIComponent(order)}`;
+  }
+  if (limit) {
+    query += `&limit=${encodeURIComponent(limit)}`;
+  }
+
   const rows = await supabaseRequest(table, { query });
   return Array.isArray(rows) ? rows : [];
 }
 
 async function loadDashboard() {
-  const [identities, conversations, messages] = await Promise.all([
-    listRecent(CRM_TABLES.identities),
-    listRecent(CRM_TABLES.conversations),
-    listRecent(CRM_TABLES.messages)
-  ]);
+  const [identities, conversations, messages, roles, relationships] =
+    await Promise.all([
+      listRows(CRM_TABLES.identities),
+      listRows(CRM_TABLES.conversations),
+      listRows(CRM_TABLES.messages),
+      listRows(CRM_TABLES.roles),
+      listRows(CRM_TABLES.relationships)
+    ]);
 
   return {
     ok: true,
     status: 'READY',
-    version: 'CRM-042B',
+    version: 'CRM-101A',
     identities,
     conversations,
     messages,
+    roles,
+    relationships,
     counts: {
       identities: identities.length,
       conversations: conversations.length,
-      messages: messages.length
+      messages: messages.length,
+      roles: roles.length,
+      relationships: relationships.length
     }
   };
 }
