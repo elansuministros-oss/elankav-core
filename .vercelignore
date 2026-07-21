@@ -1,0 +1,5 @@
+# CRM-101B controlled Preview
+# Keep only the authentication and CRM API functions to remain below the Vercel Hobby limit.
+api/**
+!api/auth.js
+!api/crm.js
