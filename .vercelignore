@@ -1,4 +1,5 @@
-# CRM-100 temporary frontend Preview
-# Exclude all serverless routes except the single local auth function.
+# CRM-101C controlled Preview
+# Preserve the validated professional CRM UI and deploy only required local APIs.
 api/**
 !api/auth.js
+!api/crm.js
