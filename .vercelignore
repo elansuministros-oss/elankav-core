@@ -1,3 +1,4 @@
-# CRM-100 temporary frontend-only Preview
-# Prevent Vercel Hobby from packaging the repository's serverless API routes.
+# CRM-100 temporary frontend Preview
+# Exclude all serverless routes except the single local auth function.
 api/**
+!api/auth.js
