@@ -8,7 +8,7 @@
       "destination": "https://elankav-core.vercel.app/api/crm"
     },
     {
-      "source": "/:path*",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
