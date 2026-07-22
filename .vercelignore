@@ -1,4 +1,5 @@
-# CRM-100 temporary frontend Preview
-# Exclude all serverless routes except the single local auth function.
+# CRM frontend deployment
+# Deploy only the local authentication and CRM API functions.
 api/**
 !api/auth.js
+!api/crm.js
