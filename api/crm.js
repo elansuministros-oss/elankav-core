@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+﻿import { randomUUID } from 'node:crypto';
 
 import {
   buildIdentityMetadata,
@@ -54,12 +54,18 @@ function requireAdmin(req) {
 }
 
 function getSupabaseConfig() {
-  const url = normalize(process.env.SUPABASE_URL).replace(/\/+$/, '');
+  const url = normalize(process.env.SUPABASE_URL)
+    .replace(/\/rest\/v1\/?$/i, '')
+    .replace(/\/+$/, '');
+
   const key = normalize(
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY
   );
 
-  if (!url || !key) throw new Error('CRM_SUPABASE_SERVER_CONFIG_MISSING');
+  console.log('SUPABASE KEY:', key.substring(0, 12));
+  console.log('SUPABASE URL:', url);
+
   return { url, key };
 }
 
@@ -68,14 +74,15 @@ async function supabaseRequest(
   { method = 'GET', query = '', body, prefer } = {}
 ) {
   const { url, key } = getSupabaseConfig();
+  console.log('SUPABASE URL:', url);
+console.log('REQUEST URL:', `${url}/rest/v1/${table}${query ? `?${query}` : ''}`);
   const response = await fetch(
     `${url}/rest/v1/${table}${query ? `?${query}` : ''}`,
     {
       method,
       headers: {
         apikey: key,
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
+                'Content-Type': 'application/json',
         Prefer: prefer || 'return=representation'
       },
       body: body === undefined ? undefined : JSON.stringify(body)
@@ -556,3 +563,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
