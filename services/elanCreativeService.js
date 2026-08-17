@@ -18,6 +18,16 @@ function normalizePrompt(prompt) {
   return value;
 }
 
+function normalizeVideoId(videoId) {
+  const id = String(videoId || '').trim();
+  if (!id) {
+    const error = new Error('Se requiere el identificador del video.');
+    error.code = 'ELAN_VIDEO_ID_REQUIRED';
+    throw error;
+  }
+  return id;
+}
+
 export async function generateElanImage({ prompt, size = '1024x1024' } = {}) {
   const apiKey = requireApiKey();
   const cleanPrompt = normalizePrompt(prompt);
@@ -108,12 +118,7 @@ export async function createElanVideo({
 
 export async function getElanVideoStatus(videoId) {
   const apiKey = requireApiKey();
-  const id = String(videoId || '').trim();
-  if (!id) {
-    const error = new Error('Se requiere el identificador del video.');
-    error.code = 'ELAN_VIDEO_ID_REQUIRED';
-    throw error;
-  }
+  const id = normalizeVideoId(videoId);
 
   const response = await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(id)}`, {
     headers: {
@@ -138,5 +143,34 @@ export async function getElanVideoStatus(videoId) {
     seconds: data?.seconds || null,
     size: data?.size || null,
     error: data?.error || null,
+  };
+}
+
+export async function getElanVideoContent(videoId) {
+  const apiKey = requireApiKey();
+  const id = normalizeVideoId(videoId);
+
+  const response = await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(id)}/content`, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    let data = {};
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+    const error = new Error(data?.error?.message || 'No fue posible obtener el contenido del video.');
+    error.code = 'ELAN_VIDEO_CONTENT_FAILED';
+    error.details = data;
+    throw error;
+  }
+
+  return {
+    contentType: response.headers.get('content-type') || 'video/mp4',
+    bytes: Buffer.from(await response.arrayBuffer()),
   };
 }
