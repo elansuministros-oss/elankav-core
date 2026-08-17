@@ -9,6 +9,7 @@ import {
 import {
   createElanVideo,
   generateElanImage,
+  getElanVideoContent,
   getElanVideoStatus,
 } from '../services/elanCreativeService.js';
 
@@ -232,6 +233,21 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(204).end();
 
   if (req.method === "GET") {
+    if (String(req.query?.resource || '') === 'video-content') {
+      try {
+        const video = await getElanVideoContent(req.query?.id || req.query?.videoId);
+        res.setHeader('Content-Type', video.contentType);
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        return res.status(200).send(video.bytes);
+      } catch (error) {
+        return send(res, 404, {
+          ok: false,
+          code: error?.code || 'ELAN_VIDEO_CONTENT_FAILED',
+          error: error?.message || 'No fue posible obtener el video.'
+        });
+      }
+    }
+
     if (String(req.query?.resource || '') === 'design-gallery') {
       try {
         const items = await getPublicDesignGallery();
